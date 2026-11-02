@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Checkout</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="card">
+    <h1 id="product-name">Loading…</h1>
+    <p class="price"><span id="product-price"></span> each</p>
+
+    <label>
+      Quantity
+      <select id="quantity">
+        <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
+      </select>
+    </label>
+
+    <p class="total">Total: <strong id="total"></strong></p>
+
+    <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
+    <p id="message" role="status"></p>
+  </main>
+
+  <!-- app.js must load first: the SDK's onload calls onPayPalWebSdkLoaded() from it. -->
+  <script src="/app.js"></script>
+  <script async src="https://www.sandbox.paypal.com/web-sdk/v6/core" onload="onPayPalWebSdkLoaded()"></script>
+</body>
+</html>

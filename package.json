@@ -1,0 +1,11 @@
+{
+  "name": "paypal-hackathon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file=.env server.js"
+  },
+  "engines": {
+    "node": ">=20.11"
+  }
+}
