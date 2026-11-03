@@ -28,7 +28,7 @@ if (!["sandbox", "live"].includes(PAYPAL_ENVIRONMENT)) {
   process.exit(1);
 }
 
-const CURRENCY = "USD";
+const CURRENCY = "CAD";
 
 // ---------- PayPal REST helpers ----------
 
