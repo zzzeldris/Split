@@ -1,0 +1,28 @@
+# Render Blueprint: Render reads this to set up the web service.
+# Secrets are marked sync: false, so Render asks for them in its dashboard
+# and they are never stored in this (public) repo.
+services:
+  - type: web
+    name: bill-splitter
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/config
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: PAYPAL_ENVIRONMENT
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: DEMO_PASSCODE
+        sync: false

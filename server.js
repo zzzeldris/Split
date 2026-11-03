@@ -2,12 +2,16 @@ import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { randomUUID } from "node:crypto";
+import { createStore } from "./lib/store.js";
+import { createBills } from "./lib/bills.js";
+import { readReceiptImage } from "./lib/receipt.js";
 
 const {
   PAYPAL_CLIENT_ID,
   PAYPAL_CLIENT_SECRET,
   PAYPAL_ENVIRONMENT = "sandbox",
   PAYPAL_WEBHOOK_ID,
+  DEMO_PASSCODE,
   PORT = 3000,
 } = process.env;
 
@@ -28,11 +32,7 @@ if (!["sandbox", "live"].includes(PAYPAL_ENVIRONMENT)) {
   process.exit(1);
 }
 
-// Prices live on the server so the browser can't change what gets charged.
-const PRODUCTS = {
-  "hackathon-tee": { name: "Hackathon T-Shirt", price: "20.00" },
-};
-const CURRENCY = "USD";
+const CURRENCY = "CAD";
 
 // ---------- PayPal REST helpers ----------
 
@@ -90,49 +90,12 @@ async function paypalPost(path, body) {
   }
 }
 
-// ---------- Routes ----------
+// ---------- Bills ----------
+// Bills, claims and payments live in Redis (lib/store.js) so they survive a sleeping free host.
+// Amounts are computed on the server, so a friend's browser can't change what gets charged.
 
-async function createOrder({ productId, quantity }) {
-  const product = PRODUCTS[productId];
-  const qty = Number(quantity);
-  if (!product || !Number.isInteger(qty) || qty < 1 || qty > 10) {
-    return [400, { error: "Invalid product or quantity" }];
-  }
-
-  const total = (Number(product.price) * qty).toFixed(2);
-  const { status, data } = await paypalPost("/v2/checkout/orders", {
-    intent: "CAPTURE",
-    purchase_units: [{
-      amount: {
-        currency_code: CURRENCY,
-        value: total,
-        breakdown: { item_total: { currency_code: CURRENCY, value: total } },
-      },
-      items: [{
-        name: product.name,
-        quantity: String(qty),
-        unit_amount: { currency_code: CURRENCY, value: product.price },
-      }],
-    }],
-  });
-
-  if (status !== 201) return [502, { error: "Could not create PayPal order" }];
-  return [200, { id: data.id }];
-}
-
-async function captureOrder(orderId) {
-  const { status, data } = await paypalPost(`/v2/checkout/orders/${orderId}/capture`);
-
-  if (status === 422 && data.details?.[0]?.issue === "INSTRUMENT_DECLINED") {
-    return [422, { error: "INSTRUMENT_DECLINED" }];
-  }
-  if (status !== 201) return [502, { error: "Could not capture PayPal order" }];
-
-  // Report the capture's status, not the order's: an order can be COMPLETED while its
-  // capture is still PENDING (e.g. under review). Webhooks deliver the final outcome.
-  const capture = data.purchase_units?.[0]?.payments?.captures?.[0];
-  return [200, { status: capture?.status, captureId: capture?.id, amount: capture?.amount }];
-}
+const store = createStore();
+const bills = createBills({ store, readReceiptImage, paypalPost, demoPasscode: DEMO_PASSCODE, currency: CURRENCY });
 
 // ---------- Webhooks ----------
 
@@ -195,10 +158,17 @@ async function handleWebhook(req, res) {
 
 // ---------- HTTP server ----------
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
+const LIB_DIR = join(import.meta.dirname, "lib");
+// lib/ files the browser imports (the same split math the server uses). Nothing else in lib/ is served.
+const BROWSER_LIB = new Set(["/lib/split.js", "/lib/shares.js"]);
 
 function sendJson(res, status, body) {
-  res.writeHead(status, { "Content-Type": "application/json" });
+  if (status === 304) {
+    res.writeHead(304);
+    return res.end();
+  }
+  res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
   res.end(JSON.stringify(body));
 }
 
@@ -210,16 +180,18 @@ class HttpError extends Error {
 }
 
 async function readBody(req, limit) {
-  let raw = "";
+  const chunks = [];
+  let size = 0;
   for await (const chunk of req) {
-    raw += chunk;
-    if (raw.length > limit) throw new HttpError(413, "Body too large");
+    size += chunk.length;
+    if (size > limit) throw new HttpError(413, "Body too large");
+    chunks.push(chunk);
   }
-  return raw;
+  return Buffer.concat(chunks).toString("utf8");
 }
 
-async function readJson(req) {
-  const raw = await readBody(req, 10_000);
+async function readJson(req, limit = 10_000) {
+  const raw = await readBody(req, limit);
   try {
     return raw ? JSON.parse(raw) : {};
   } catch {
@@ -227,10 +199,14 @@ async function readJson(req) {
   }
 }
 
+const bearer = (req) => req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1] ?? null;
+
 async function serveStatic(req, res) {
   const urlPath = new URL(req.url, "http://localhost").pathname;
-  const filePath = normalize(join(PUBLIC_DIR, urlPath === "/" ? "index.html" : urlPath));
-  if (!filePath.startsWith(PUBLIC_DIR + sep)) return sendJson(res, 404, { error: "Not found" });
+  const filePath = BROWSER_LIB.has(urlPath)
+    ? join(LIB_DIR, urlPath.slice("/lib/".length))
+    : normalize(join(PUBLIC_DIR, urlPath === "/" ? "index.html" : urlPath));
+  if (!BROWSER_LIB.has(urlPath) && !filePath.startsWith(PUBLIC_DIR + sep)) return sendJson(res, 404, { error: "Not found" });
 
   try {
     const file = await readFile(filePath);
@@ -241,33 +217,50 @@ async function serveStatic(req, res) {
   }
 }
 
+// [method, path pattern, handler(req, params, query)]. Handlers return [status, body].
+const ID = "([0-9a-f-]{36})";
+const PERSON = "([0-9a-f]{8})";
+const routes = [
+  ["GET", /^\/api\/config$/, () => [200, { clientId: PAYPAL_CLIENT_ID, sdkUrl: PAYPAL_SDK_URL, currency: CURRENCY, passcodeRequired: Boolean(DEMO_PASSCODE) }]],
+  ["POST", /^\/api\/bills$/, async (req) => bills.create(await readJson(req, 1_500_000))],
+  ["GET", new RegExp(`^\/api\/bills\/${ID}$`), (req, [id], q) => bills.view(id, bearer(req), q.get("since"))],
+  ["PUT", new RegExp(`^\/api\/bills\/${ID}\/receipt$`), async (req, [id]) => bills.updateReceipt(id, bearer(req), await readJson(req, 50_000))],
+  ["POST", new RegExp(`^\/api\/bills\/${ID}\/open$`), (req, [id]) => bills.open(id, bearer(req))],
+  ["POST", new RegExp(`^\/api\/bills\/${ID}\/lock$`), (req, [id]) => bills.lock(id, bearer(req))],
+  ["POST", new RegExp(`^\/api\/bills\/${ID}\/unlock$`), (req, [id]) => bills.unlock(id, bearer(req))],
+  ["POST", new RegExp(`^\/api\/bills\/${ID}\/people$`), async (req, [id]) => bills.join(id, await readJson(req))],
+  ["PUT", new RegExp(`^\/api\/bills\/${ID}\/people\/${PERSON}\/claims$`), async (req, [id, pid]) => bills.setClaims(id, pid, bearer(req), await readJson(req))],
+  ["POST", new RegExp(`^\/api\/bills\/${ID}\/people\/${PERSON}\/reset$`), (req, [id, pid]) => bills.resetPerson(id, bearer(req), pid)],
+  ["POST", /^\/api\/orders$/, async (req) => bills.createOrder(await readJson(req))],
+  ["POST", /^\/api\/orders\/([A-Z0-9]+)\/capture$/, (req, [orderId]) => bills.captureOrder(orderId)],
+];
+
 createServer(async (req, res) => {
   try {
-    const { pathname } = new URL(req.url, "http://localhost");
+    const url = new URL(req.url, "http://localhost");
+    const { pathname } = url;
 
     // Requiring JSON blocks cross-site form posts: a browser can't send this
     // Content-Type to another origin without a CORS preflight, which we never approve.
-    if (req.method === "POST" && !req.headers["content-type"]?.startsWith("application/json")) {
+    if ((req.method === "POST" || req.method === "PUT") && !req.headers["content-type"]?.startsWith("application/json")) {
       return sendJson(res, 415, { error: "Expected application/json" });
     }
 
-    if (req.method === "GET" && pathname === "/api/config") {
-      return sendJson(res, 200, {
-        clientId: PAYPAL_CLIENT_ID,
-        sdkUrl: PAYPAL_SDK_URL,
-        currency: CURRENCY,
-        products: PRODUCTS,
-      });
-    }
     if (req.method === "POST" && pathname === "/webhooks/paypal" && PAYPAL_WEBHOOK_ID) {
       return handleWebhook(req, res);
     }
-    if (req.method === "POST" && pathname === "/api/orders") {
-      return sendJson(res, ...(await createOrder(await readJson(req))));
+
+    const photo = pathname.match(new RegExp(`^\/api\/bills\/${ID}\/photo$`));
+    if (req.method === "GET" && photo) {
+      const image = await bills.photo(photo[1]);
+      if (!image) return sendJson(res, 404, { error: "No photo for this bill" });
+      res.writeHead(200, { "Content-Type": "image/jpeg", "Cache-Control": "private, max-age=3600" });
+      return res.end(image);
     }
-    const capture = pathname.match(/^\/api\/orders\/([A-Z0-9]+)\/capture$/);
-    if (req.method === "POST" && capture) {
-      return sendJson(res, ...(await captureOrder(capture[1])));
+
+    for (const [method, pattern, handler] of routes) {
+      const match = req.method === method && pathname.match(pattern);
+      if (match) return sendJson(res, ...(await handler(req, match.slice(1), url.searchParams)));
     }
     if (req.method === "GET") return serveStatic(req, res);
 
@@ -278,6 +271,8 @@ createServer(async (req, res) => {
     if (!res.headersSent) sendJson(res, 500, { error: "Server error" });
   }
 }).listen(PORT, () => {
-  console.log(`Checkout running at http://localhost:${PORT} (PayPal ${PAYPAL_ENVIRONMENT})`);
+  console.log(`Bill splitter running at http://localhost:${PORT} (PayPal ${PAYPAL_ENVIRONMENT}, ${store.kind} store)`);
+  if (store.kind === "memory") console.log("No UPSTASH_REDIS_REST_URL/TOKEN: bills are kept in memory and vanish on restart");
+  if (!DEMO_PASSCODE) console.log("No DEMO_PASSCODE: anyone can create bills (fine locally, set it when deployed)");
   if (!PAYPAL_WEBHOOK_ID) console.log("Webhooks disabled: set PAYPAL_WEBHOOK_ID to enable /webhooks/paypal");
 });

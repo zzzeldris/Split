@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file=.env server.js",
-    "test": "node --test test/"
+    "start": "node --env-file-if-exists=.env server.js",
+    "test": "node --test \"test/**/*.test.js\""
   },
   "engines": {
-    "node": ">=20.11"
+    "node": ">=22.9"
   },
   "dependencies": {
     "@google/genai": "^2.32.0",
