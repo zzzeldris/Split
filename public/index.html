@@ -2,22 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Pay your share</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Split the Bill</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <main class="card">
-    <h1 id="title">Loading…</h1>
-    <p id="description"></p>
-
-    <p class="total">Your share: <strong id="total"></strong></p>
-
-    <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
-    <p id="message" role="status"></p>
+  <main id="app" aria-live="polite">
+    <p class="muted">Loading…</p>
   </main>
+  <p id="toast" role="status" hidden></p>
 
   <!-- app.js loads the PayPal SDK itself, using the URL for the environment set on the server. -->
-  <script src="/app.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
