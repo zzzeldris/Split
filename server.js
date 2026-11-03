@@ -3,12 +3,28 @@ import { readFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
-const { PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, PORT = 3000 } = process.env;
-const PAYPAL_API = "https://api-m.sandbox.paypal.com";
+const {
+  PAYPAL_CLIENT_ID,
+  PAYPAL_CLIENT_SECRET,
+  PAYPAL_ENVIRONMENT = "sandbox",
+  PAYPAL_WEBHOOK_ID,
+  PORT = 3000,
+} = process.env;
+
+// One switch moves both the REST API and the browser SDK, so sandbox and live never mix.
+const IS_LIVE = PAYPAL_ENVIRONMENT === "live";
+const PAYPAL_API = IS_LIVE ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+const PAYPAL_SDK_URL = IS_LIVE
+  ? "https://www.paypal.com/web-sdk/v6/core"
+  : "https://www.sandbox.paypal.com/web-sdk/v6/core";
 const PUBLIC_DIR = join(import.meta.dirname, "public");
 
 if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
   console.error("Missing PAYPAL_CLIENT_ID or PAYPAL_CLIENT_SECRET. Fill them in in .env.");
+  process.exit(1);
+}
+if (!["sandbox", "live"].includes(PAYPAL_ENVIRONMENT)) {
+  console.error(`PAYPAL_ENVIRONMENT must be "sandbox" or "live", got "${PAYPAL_ENVIRONMENT}".`);
   process.exit(1);
 }
 
@@ -112,8 +128,69 @@ async function captureOrder(orderId) {
   }
   if (status !== 201) return [502, { error: "Could not capture PayPal order" }];
 
+  // Report the capture's status, not the order's: an order can be COMPLETED while its
+  // capture is still PENDING (e.g. under review). Webhooks deliver the final outcome.
   const capture = data.purchase_units?.[0]?.payments?.captures?.[0];
-  return [200, { status: data.status, captureId: capture?.id, amount: capture?.amount }];
+  return [200, { status: capture?.status, captureId: capture?.id, amount: capture?.amount }];
+}
+
+// ---------- Webhooks ----------
+
+const seenEventIds = new Set(); // in-memory; use a database once you have one
+
+async function verifyWebhook(headers, rawBody) {
+  // The event is spliced in as raw text: re-serialising parsed JSON can change
+  // its bytes and make PayPal's signature check fail.
+  const fields = {
+    auth_algo: headers["paypal-auth-algo"],
+    cert_url: headers["paypal-cert-url"],
+    transmission_id: headers["paypal-transmission-id"],
+    transmission_sig: headers["paypal-transmission-sig"],
+    transmission_time: headers["paypal-transmission-time"],
+    webhook_id: PAYPAL_WEBHOOK_ID,
+  };
+  const body = `${JSON.stringify(fields).slice(0, -1)},"webhook_event":${rawBody}}`;
+
+  const res = await fetch(`${PAYPAL_API}/v1/notifications/verify-webhook-signature`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await getAccessToken()}`, "Content-Type": "application/json" },
+    body,
+  });
+  const data = await res.json().catch(() => ({}));
+  return res.ok && data.verification_status === "SUCCESS";
+}
+
+function handleWebhookEvent(event) {
+  const resource = event.resource ?? {};
+  switch (event.event_type) {
+    case "PAYMENT.CAPTURE.COMPLETED":
+      console.log(`Capture ${resource.id} completed: ${resource.amount?.value} ${resource.amount?.currency_code}`);
+      break;
+    case "PAYMENT.CAPTURE.PENDING":
+      console.log(`Capture ${resource.id} pending: ${resource.status_details?.reason ?? "unknown reason"}`);
+      break;
+    case "PAYMENT.CAPTURE.DENIED":
+      console.log(`Capture ${resource.id} denied — do not fulfil this order`);
+      break;
+    default:
+      console.log(`Ignoring webhook event ${event.event_type}`);
+  }
+}
+
+async function handleWebhook(req, res) {
+  const raw = await readBody(req, 100_000);
+
+  // Answer 200 even when verification fails so PayPal doesn't keep retrying; just ignore it.
+  if (!(await verifyWebhook(req.headers, raw))) {
+    console.warn("Ignoring webhook with an invalid signature");
+    return sendJson(res, 200, { ok: true });
+  }
+
+  const event = JSON.parse(raw);
+  sendJson(res, 200, { ok: true }); // acknowledge before processing
+  if (seenEventIds.has(event.id)) return; // PayPal may deliver the same event more than once
+  seenEventIds.add(event.id);
+  handleWebhookEvent(event);
 }
 
 // ---------- HTTP server ----------
@@ -125,13 +202,29 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-async function readJson(req) {
+class HttpError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
+}
+
+async function readBody(req, limit) {
   let raw = "";
   for await (const chunk of req) {
     raw += chunk;
-    if (raw.length > 10_000) throw new Error("Body too large");
+    if (raw.length > limit) throw new HttpError(413, "Body too large");
   }
-  return raw ? JSON.parse(raw) : {};
+  return raw;
+}
+
+async function readJson(req) {
+  const raw = await readBody(req, 10_000);
+  try {
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new HttpError(400, "Invalid JSON");
+  }
 }
 
 async function serveStatic(req, res) {
@@ -152,8 +245,22 @@ createServer(async (req, res) => {
   try {
     const { pathname } = new URL(req.url, "http://localhost");
 
+    // Requiring JSON blocks cross-site form posts: a browser can't send this
+    // Content-Type to another origin without a CORS preflight, which we never approve.
+    if (req.method === "POST" && !req.headers["content-type"]?.startsWith("application/json")) {
+      return sendJson(res, 415, { error: "Expected application/json" });
+    }
+
     if (req.method === "GET" && pathname === "/api/config") {
-      return sendJson(res, 200, { clientId: PAYPAL_CLIENT_ID, currency: CURRENCY, products: PRODUCTS });
+      return sendJson(res, 200, {
+        clientId: PAYPAL_CLIENT_ID,
+        sdkUrl: PAYPAL_SDK_URL,
+        currency: CURRENCY,
+        products: PRODUCTS,
+      });
+    }
+    if (req.method === "POST" && pathname === "/webhooks/paypal" && PAYPAL_WEBHOOK_ID) {
+      return handleWebhook(req, res);
     }
     if (req.method === "POST" && pathname === "/api/orders") {
       return sendJson(res, ...(await createOrder(await readJson(req))));
@@ -166,9 +273,11 @@ createServer(async (req, res) => {
 
     sendJson(res, 404, { error: "Not found" });
   } catch (err) {
+    if (err instanceof HttpError) return sendJson(res, err.status, { error: err.message });
     console.error(err);
-    sendJson(res, 500, { error: "Server error" });
+    if (!res.headersSent) sendJson(res, 500, { error: "Server error" });
   }
 }).listen(PORT, () => {
-  console.log(`Checkout running at http://localhost:${PORT}`);
+  console.log(`Checkout running at http://localhost:${PORT} (PayPal ${PAYPAL_ENVIRONMENT})`);
+  if (!PAYPAL_WEBHOOK_ID) console.log("Webhooks disabled: set PAYPAL_WEBHOOK_ID to enable /webhooks/paypal");
 });

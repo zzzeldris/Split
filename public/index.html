@@ -24,8 +24,7 @@
     <p id="message" role="status"></p>
   </main>
 
-  <!-- app.js must load first: the SDK's onload calls onPayPalWebSdkLoaded() from it. -->
+  <!-- app.js loads the PayPal SDK itself, using the URL for the environment set on the server. -->
   <script src="/app.js"></script>
-  <script async src="https://www.sandbox.paypal.com/web-sdk/v6/core" onload="onPayPalWebSdkLoaded()"></script>
 </body>
 </html>

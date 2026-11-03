@@ -1,2 +1,7 @@
 .env
 node_modules/
+CLAUDE.md
+
+# Receipt photos can contain personal or card details; keep them out of the public repo
+test-receipts/*
+!test-receipts/.gitkeep

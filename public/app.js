@@ -36,11 +36,19 @@ async function createOrder() {
 
 async function onApprove({ orderId }) {
   showMessage("Finishing your payment…");
-  const res = await fetch(`/api/orders/${orderId}/capture`, { method: "POST" });
+  const res = await fetch(`/api/orders/${orderId}/capture`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
   const data = await res.json();
 
   if (data.error === "INSTRUMENT_DECLINED") {
     showMessage("Your payment method was declined. Click the button to try a different one.", "error");
+  } else if (res.ok && data.status === "PENDING") {
+    // Money is on its way but not settled (e.g. under review) — don't say "paid" or "not charged".
+    button.hidden = true;
+    quantityEl.disabled = true;
+    showMessage(`Payment received and pending review. Reference: ${data.captureId}`, "info");
   } else if (!res.ok || data.status !== "COMPLETED") {
     showMessage("Something went wrong capturing the payment. You have not been charged.", "error");
   } else {
@@ -50,11 +58,24 @@ async function onApprove({ orderId }) {
   }
 }
 
-async function onPayPalWebSdkLoaded() {
+// The SDK URL comes from the server so it always matches PAYPAL_ENVIRONMENT.
+function loadScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.onload = resolve;
+    script.onerror = () => reject(new Error(`Failed to load ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function init() {
   try {
     config = await (await fetch("/api/config")).json();
     renderProduct();
     quantityEl.addEventListener("change", renderProduct);
+    await loadScript(config.sdkUrl);
 
     const sdk = await window.paypal.createInstance({
       clientId: config.clientId,
@@ -96,3 +117,5 @@ async function onPayPalWebSdkLoaded() {
     showMessage("Checkout failed to load. Is the server running?", "error");
   }
 }
+
+init();
