@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file=.env server.js"
+    "start": "node --env-file=.env server.js",
+    "test": "node --test test/"
   },
   "engines": {
     "node": ">=20.11"
