@@ -1,10 +1,13 @@
-const PRODUCT_ID = "hackathon-tee";
+// The pay link looks like /?bill=<id>&person=<name>.
+const params = new URLSearchParams(location.search);
+const BILL_ID = params.get("bill");
+const PERSON = params.get("person");
 
-const quantityEl = document.getElementById("quantity");
 const messageEl = document.getElementById("message");
 const button = document.querySelector("paypal-button");
 
 let config;
+let bill;
 
 function showMessage(text, kind = "info") {
   messageEl.textContent = text;
@@ -15,19 +18,20 @@ function formatMoney(value) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: config.currency }).format(value);
 }
 
-function renderProduct() {
-  const product = config.products[PRODUCT_ID];
-  document.getElementById("product-name").textContent = product.name;
-  document.getElementById("product-price").textContent = formatMoney(product.price);
-  document.getElementById("total").textContent = formatMoney(product.price * quantityEl.value);
+const shareValue = () => (bill.shares[PERSON].cents / 100).toFixed(2);
+
+function renderShare() {
+  document.getElementById("title").textContent = `${PERSON}, you owe ${bill.payer.name}`;
+  document.getElementById("description").textContent = bill.description;
+  document.getElementById("total").textContent = formatMoney(shareValue());
 }
 
-// The server works out the price; the browser only says what and how many.
+// The server looks up the amount and who gets paid; the browser only says which share.
 async function createOrder() {
   const res = await fetch("/api/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ productId: PRODUCT_ID, quantity: Number(quantityEl.value) }),
+    body: JSON.stringify({ billId: BILL_ID, person: PERSON }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error ?? "Could not create order");
@@ -47,13 +51,11 @@ async function onApprove({ orderId }) {
   } else if (res.ok && data.status === "PENDING") {
     // Money is on its way but not settled (e.g. under review) — don't say "paid" or "not charged".
     button.hidden = true;
-    quantityEl.disabled = true;
     showMessage(`Payment received and pending review. Reference: ${data.captureId}`, "info");
   } else if (!res.ok || data.status !== "COMPLETED") {
     showMessage("Something went wrong capturing the payment. You have not been charged.", "error");
   } else {
     button.hidden = true;
-    quantityEl.disabled = true;
     showMessage(`Paid ${formatMoney(data.amount.value)}! Transaction ID: ${data.captureId}`, "success");
   }
 }
@@ -73,8 +75,17 @@ function loadScript(src) {
 async function init() {
   try {
     config = await (await fetch("/api/config")).json();
-    renderProduct();
-    quantityEl.addEventListener("change", renderProduct);
+    const billRes = await fetch(`/api/bills/${encodeURIComponent(BILL_ID)}`);
+    bill = await billRes.json();
+    if (!billRes.ok || !bill.shares[PERSON]) {
+      showMessage("This payment link isn't valid.", "error");
+      return;
+    }
+    renderShare();
+    if (bill.shares[PERSON].status !== "unpaid") {
+      showMessage(`Your share is already ${bill.shares[PERSON].status}. Thanks!`, "success");
+      return;
+    }
     await loadScript(config.sdkUrl);
 
     const sdk = await window.paypal.createInstance({
@@ -85,7 +96,7 @@ async function init() {
 
     const methods = await sdk.findEligibleMethods({
       currencyCode: config.currency,
-      amount: config.products[PRODUCT_ID].price,
+      amount: shareValue(),
     });
     if (!methods.isEligible("paypal")) {
       showMessage("PayPal isn't available for this browser or region.", "error");

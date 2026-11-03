@@ -28,10 +28,6 @@ if (!["sandbox", "live"].includes(PAYPAL_ENVIRONMENT)) {
   process.exit(1);
 }
 
-// Prices live on the server so the browser can't change what gets charged.
-const PRODUCTS = {
-  "hackathon-tee": { name: "Hackathon T-Shirt", price: "20.00" },
-};
 const CURRENCY = "USD";
 
 // ---------- PayPal REST helpers ----------
@@ -92,35 +88,84 @@ async function paypalPost(path, body) {
 
 // ---------- Routes ----------
 
-async function createOrder({ productId, quantity }) {
-  const product = PRODUCTS[productId];
-  const qty = Number(quantity);
-  if (!product || !Number.isInteger(qty) || qty < 1 || qty > 10) {
-    return [400, { error: "Invalid product or quantity" }];
+// ---------- Bills ----------
+// A bill is one split receipt: who paid the restaurant, and what each friend owes them.
+// Amounts live on the server so a friend's browser can't change what gets charged.
+// In memory for now, so bills vanish when the server restarts.
+
+const bills = new Map(); // billId -> bill
+const orderIndex = new Map(); // PayPal order id -> { billId, person }
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const isName = (v) => typeof v === "string" && v.trim().length > 0 && v.length <= 50;
+const centsToValue = (cents) => (cents / 100).toFixed(2);
+
+// Body: { payer: { name, email }, description, shares: { [name]: cents } }
+// The payer's own share (if the split includes it) is skipped: they already paid the restaurant.
+function createBill({ payer, description, shares }) {
+  if (!payer || !isName(payer.name) || typeof payer.email !== "string" || !EMAIL_RE.test(payer.email)) {
+    return [400, { error: "payer needs a name and a valid PayPal email" }];
+  }
+  if (typeof description !== "string" || description.length > 100) {
+    return [400, { error: "description must be a string of at most 100 characters" }];
+  }
+  if (!shares || typeof shares !== "object" || Array.isArray(shares)) {
+    return [400, { error: "shares must be an object of { name: cents }" }];
   }
 
-  const total = (Number(product.price) * qty).toFixed(2);
+  const owed = {};
+  for (const [name, cents] of Object.entries(shares)) {
+    if (!isName(name) || !Number.isInteger(cents) || cents < 0 || cents > 1_000_000) {
+      return [400, { error: `Invalid share for "${name}": cents must be an integer from 0 to 1000000` }];
+    }
+    if (name === payer.name || cents === 0) continue;
+    owed[name] = { cents, status: "unpaid", captureId: null };
+  }
+  const count = Object.keys(owed).length;
+  if (count === 0 || count > 20) return [400, { error: "A bill needs 1 to 20 people who owe money" }];
+
+  const id = randomUUID();
+  bills.set(id, { id, payer: { name: payer.name, email: payer.email }, description, currency: CURRENCY, shares: owed });
+  return [201, { id }];
+}
+
+function getBill(id) {
+  const bill = bills.get(id);
+  return bill ? [200, bill] : [404, { error: "Bill not found" }];
+}
+
+// ---------- Orders ----------
+
+// Body: { billId, person }. The money goes straight to the payer's PayPal account
+// (payee override), not to this app's merchant account.
+async function createOrder({ billId, person }) {
+  const bill = bills.get(billId);
+  const share = bill?.shares[person];
+  if (!share) return [404, { error: "No such bill, or that person doesn't owe anything on it" }];
+  if (share.status !== "unpaid") return [409, { error: `This share is already ${share.status}` }];
+
+  const value = centsToValue(share.cents);
   const { status, data } = await paypalPost("/v2/checkout/orders", {
     intent: "CAPTURE",
     purchase_units: [{
-      amount: {
-        currency_code: CURRENCY,
-        value: total,
-        breakdown: { item_total: { currency_code: CURRENCY, value: total } },
-      },
-      items: [{
-        name: product.name,
-        quantity: String(qty),
-        unit_amount: { currency_code: CURRENCY, value: product.price },
-      }],
+      payee: { email_address: bill.payer.email },
+      description: `${person}'s share${bill.description ? ` of ${bill.description}` : ""}`.slice(0, 127),
+      amount: { currency_code: bill.currency, value },
     }],
   });
 
   if (status !== 201) return [502, { error: "Could not create PayPal order" }];
+  orderIndex.set(data.id, { billId, person });
   return [200, { id: data.id }];
 }
 
 async function captureOrder(orderId) {
+  // Only capture orders this server created for a bill.
+  const ref = orderIndex.get(orderId);
+  if (!ref) return [404, { error: "Unknown order" }];
+  const bill = bills.get(ref.billId);
+  const share = bill.shares[ref.person];
+
   const { status, data } = await paypalPost(`/v2/checkout/orders/${orderId}/capture`);
 
   if (status === 422 && data.details?.[0]?.issue === "INSTRUMENT_DECLINED") {
@@ -131,6 +176,14 @@ async function captureOrder(orderId) {
   // Report the capture's status, not the order's: an order can be COMPLETED while its
   // capture is still PENDING (e.g. under review). Webhooks deliver the final outcome.
   const capture = data.purchase_units?.[0]?.payments?.captures?.[0];
+  const amountMatches =
+    capture?.amount?.currency_code === bill.currency && capture?.amount?.value === centsToValue(share.cents);
+  if (!amountMatches) {
+    console.error(`Capture ${capture?.id} amount ${JSON.stringify(capture?.amount)} doesn't match share of ${share.cents} cents`);
+  } else if (capture.status === "COMPLETED" || capture.status === "PENDING") {
+    share.status = capture.status === "COMPLETED" ? "paid" : "pending";
+    share.captureId = capture.id;
+  }
   return [200, { status: capture?.status, captureId: capture?.id, amount: capture?.amount }];
 }
 
@@ -256,8 +309,14 @@ createServer(async (req, res) => {
         clientId: PAYPAL_CLIENT_ID,
         sdkUrl: PAYPAL_SDK_URL,
         currency: CURRENCY,
-        products: PRODUCTS,
       });
+    }
+    if (req.method === "POST" && pathname === "/api/bills") {
+      return sendJson(res, ...createBill(await readJson(req)));
+    }
+    const billMatch = pathname.match(/^\/api\/bills\/([0-9a-f-]{36})$/);
+    if (req.method === "GET" && billMatch) {
+      return sendJson(res, ...getBill(billMatch[1]));
     }
     if (req.method === "POST" && pathname === "/webhooks/paypal" && PAYPAL_WEBHOOK_ID) {
       return handleWebhook(req, res);

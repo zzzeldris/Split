@@ -3,22 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Checkout</title>
+  <title>Pay your share</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <main class="card">
-    <h1 id="product-name">Loading…</h1>
-    <p class="price"><span id="product-price"></span> each</p>
+    <h1 id="title">Loading…</h1>
+    <p id="description"></p>
 
-    <label>
-      Quantity
-      <select id="quantity">
-        <option>1</option><option>2</option><option>3</option><option>4</option><option>5</option>
-      </select>
-    </label>
-
-    <p class="total">Total: <strong id="total"></strong></p>
+    <p class="total">Your share: <strong id="total"></strong></p>
 
     <paypal-button type="pay" class="paypal-gold" hidden></paypal-button>
     <p id="message" role="status"></p>
