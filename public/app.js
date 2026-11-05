@@ -63,6 +63,7 @@ async function refresh() {
   if (status !== 200) throw Object.assign(new Error(data?.error ?? "Couldn't load the bill"), { status });
   bill = data;
   if (me && !bill.people.some((p) => p.id === me.personId)) forgetMe();
+  if (me || bill.isAdmin) rememberBill(BILL_ID, { merchant: bill.receipt.merchant, totalCents: bill.receipt.totalCents, status: bill.status });
   return true;
 }
 
@@ -118,52 +119,177 @@ const releasePointer = () => setTimeout(() => {
 document.addEventListener("pointerup", releasePointer, true);
 document.addEventListener("pointercancel", releasePointer, true);
 
-// ---------- Create ----------
+// ---------- Create (home screen) ----------
+
+// The payer's name and email are remembered, so next time a photo is all it takes.
+const profile = () => storage.get("profile") ?? {};
+// Bills this device created or joined, newest first, so the home screen can reopen them.
+const recentBills = () => storage.get("recent") ?? [];
+function rememberBill(id, info) {
+  const old = recentBills();
+  const entry = { ...(old.find((b) => b.id === id) ?? {}), id, ...info, at: Date.now() };
+  storage.set("recent", [entry, ...old.filter((b) => b.id !== id)].slice(0, 8));
+}
+
+const STATUS_LABEL = { draft: "checking receipt", open: "claiming", locked: "collecting", settled: "settled" };
 
 function renderCreate() {
+  const p = profile();
+  const known = Boolean(p.name && p.email);
+  const recent = recentBills();
+  const savedCode = storage.get("passcode") ?? "";
   app.innerHTML = `
-    <header class="stack">
-      <h1>Split the bill</h1>
-      <p class="muted">Snap the receipt. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
-    </header>
-    <form class="card stack" id="create">
-      ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
-      <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
-      <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
-      <label>Receipt photo<input name="photo" type="file" accept="image/*" required></label>
-      <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details.</p>
-      <button class="primary" type="submit">Read receipt</button>
-      <p class="error-text small" id="create-error"></p>
-    </form>`;
+    <header class="app-bar"><img src="/icon.svg" alt="" width="32" height="32"><h1>Split the bill</h1></header>
+    ${installBanner()}
+    <form class="stack" id="create" novalidate>
+      <section class="card stack">
+        <label class="camera-btn">
+          <input type="file" name="photo" accept="image/*" capture="environment" hidden>
+          <span class="camera-icon" aria-hidden="true">📷</span>
+          <span>Take a photo of the receipt</span>
+        </label>
+        <label class="center small library-link">
+          <input type="file" name="library" accept="image/*" hidden>
+          or choose one from your photos
+        </label>
+        <div id="preview" class="center" hidden></div>
+      </section>
+      <section class="card stack">
+        ${known ? `
+          <div class="row" id="known-details">
+            <div><div class="small muted">Friends pay you back at</div><strong>${esc(p.name)}</strong> <span class="small muted">${esc(p.email)}</span></div>
+            <button type="button" class="link small" id="edit-details">Change</button>
+          </div>` : ""}
+        <div class="stack" id="detail-fields" ${known ? "hidden" : ""}>
+          <label>Your name<input name="name" required maxlength="30" autocomplete="given-name" value="${esc(p.name ?? "")}"></label>
+          <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email" value="${esc(p.email ?? "")}"></label>
+        </div>
+        ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off" value="${esc(savedCode)}"></label>` : ""}
+      </section>
+      <p class="small muted center">Sandbox demo: please don't use receipts with personal or card details.</p>
+      <p class="error-text small center" id="create-error" role="alert"></p>
+      <div class="action-bar" id="read-bar" hidden><div><button class="primary wide" type="submit">Read receipt</button></div></div>
+    </form>
+    ${recent.length ? `
+      <section class="card stack">
+        <h2>Your bills</h2>
+        <ul class="people">${recent.map((b) => `
+          <li><a href="/?b=${esc(b.id)}">${esc(b.merchant || "Receipt")}</a>
+          <span class="small muted">${b.totalCents != null ? `${money(b.totalCents)} · ` : ""}${esc(STATUS_LABEL[b.status] ?? "")}</span></li>`).join("")}</ul>
+      </section>` : ""}`;
 
   const form = document.getElementById("create");
+  const errorEl = document.getElementById("create-error");
+  let photo = null;
+
+  bindInstallBanner();
+  document.getElementById("edit-details")?.addEventListener("click", () => {
+    document.getElementById("known-details").hidden = true;
+    document.getElementById("detail-fields").hidden = false;
+    form.elements.name.focus();
+  });
+
+  // Shows the name/email fields if something is missing, and says whether everything is filled in.
+  const detailsValid = () => {
+    const ok = ["name", "email", "passcode"].every((n) => !form.elements[n] || form.elements[n].checkValidity());
+    if (!ok) {
+      document.getElementById("detail-fields").hidden = false;
+      document.getElementById("known-details")?.setAttribute("hidden", "");
+    }
+    return ok;
+  };
+
+  for (const input of [form.elements.photo, form.elements.library]) {
+    input.addEventListener("change", () => {
+      photo = input.files[0];
+      if (!photo) return;
+      const preview = document.getElementById("preview");
+      preview.hidden = false;
+      preview.innerHTML = `<img class="thumb" alt="Your receipt photo" src="${URL.createObjectURL(photo)}">`;
+      document.getElementById("read-bar").hidden = false;
+      errorEl.textContent = "";
+      // Name and email already known: go straight to reading the receipt.
+      if (detailsValid()) form.requestSubmit();
+      else form.querySelector("input:invalid:not([type=file])")?.focus();
+    });
+  }
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const button = form.querySelector("button");
-    const errorEl = document.getElementById("create-error");
+    if (!photo) return (errorEl.textContent = "Take a photo of the receipt first.");
+    if (!detailsValid()) return (errorEl.textContent = "Add your name and PayPal email so friends know where to pay.");
     const fields = new FormData(form);
-    button.disabled = true;
-    errorEl.textContent = "";
+    const busy = showBusy(photo);
     try {
-      button.textContent = "Shrinking photo…";
-      const image = await resizeImage(fields.get("photo"));
-      button.textContent = "Reading receipt with Gemini…";
-      const { ok, data } = await api("POST", "/api/bills", {
-        passcode: fields.get("passcode") ?? undefined,
-        payer: { name: fields.get("name"), email: fields.get("email") },
-        image,
-      });
+      busy.step("Shrinking photo…");
+      const image = await resizeImage(photo);
+      busy.step("Reading the receipt with AI…");
+      const payer = { name: fields.get("name").trim(), email: fields.get("email").trim() };
+      const { ok, data } = await api("POST", "/api/bills", { passcode: fields.get("passcode") ?? undefined, payer, image });
       if (!ok) throw new Error(data.error ?? "Something went wrong");
+      storage.set("profile", payer);
+      if (fields.get("passcode")) storage.set("passcode", fields.get("passcode"));
       storage.set(`admin:${data.billId}`, data.adminToken);
       storage.set(`person:${data.billId}`, { personId: data.payerId, token: data.payerToken });
+      rememberBill(data.billId, { status: "draft" });
       location.href = `/?b=${data.billId}`;
     } catch (err) {
+      busy.close();
       errorEl.textContent = err.message;
-      button.disabled = false;
-      button.textContent = "Read receipt";
     }
   });
 }
+
+// A full-screen "working on it" view, so a slow AI read doesn't look like a frozen page.
+function showBusy(photo) {
+  const el = document.createElement("div");
+  el.className = "busy";
+  el.innerHTML = `<img alt="" src="${URL.createObjectURL(photo)}"><div class="spinner" aria-hidden="true"></div><p class="busy-text" role="status"></p>`;
+  document.body.append(el);
+  return {
+    step: (text) => (el.querySelector(".busy-text").textContent = text),
+    close: () => el.remove(),
+  };
+}
+
+// ---------- Installing to the home screen ----------
+
+let installPrompt = null; // Android/Chrome: the browser's own install dialog, saved for our button
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  installPrompt = event;
+  if (!BILL_ID) render();
+});
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+function installBanner() {
+  if (isStandalone() || storage.get("install-dismissed")) return "";
+  if (installPrompt) {
+    return `<div class="card row install"><span class="small">Add Split to your home screen for one-tap receipts.</span>
+      <span class="row"><button class="primary" id="install">Install</button><button class="link small" id="install-later">Not now</button></span></div>`;
+  }
+  if (isIOS()) {
+    return `<div class="card row install"><span class="small">Install: tap <strong>Share</strong> <span aria-hidden="true">⎋</span>, then <strong>Add to Home Screen</strong>.</span>
+      <button class="link small" id="install-later">Got it</button></div>`;
+  }
+  return "";
+}
+
+function bindInstallBanner() {
+  document.getElementById("install")?.addEventListener("click", async () => {
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => {});
+    installPrompt = null;
+    render();
+  });
+  document.getElementById("install-later")?.addEventListener("click", () => {
+    storage.set("install-dismissed", true);
+    render();
+  });
+}
+
+const tapFeedback = () => navigator.vibrate?.(8); // a light tick on Android; iPhones ignore it
 
 // Scale to at most 1600 px on the long side and re-encode as JPEG, so uploads stay small.
 async function resizeImage(file) {
@@ -206,9 +332,10 @@ function renderReview() {
   const tipPcts = [15, 18, 20];
 
   app.innerHTML = `
+    ${topBar()}
     <header class="stack">
       <h1>Check the receipt</h1>
-      <p class="muted">Gemini read this from your photo. Fix anything it got wrong before your friends claim items.</p>
+      <p class="muted">AI read this from your photo. Fix anything it got wrong before your friends claim items.</p>
     </header>
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
@@ -237,9 +364,11 @@ function renderReview() {
       <div class="money-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
       ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("") || `<p class="notice ok">Matches the receipt.</p>`}
     </section>
-    <button class="primary" id="open">Looks right: let friends claim items</button>
-    <p class="error-text small" id="review-error"></p>
-    <button class="link small" id="photo">View receipt photo</button>`;
+    <button class="link small" id="photo">View receipt photo</button>
+    <div class="action-bar"><div class="stack">
+      <p class="error-text small center" id="review-error" role="alert"></p>
+      <button class="primary wide" id="open">Looks right: invite friends</button>
+    </div></div>`;
 
   // Typing updates the draft without re-rendering (so the field keeps focus); leaving it re-renders totals.
   app.querySelectorAll("input[data-item]").forEach((input) =>
@@ -285,7 +414,7 @@ function renderReview() {
 }
 
 function renderWaiting() {
-  app.innerHTML = `
+  app.innerHTML = `${topBar()}
     <section class="card stack">
       <h1>Almost ready</h1>
       <p class="muted">${esc(bill.payer.name)} is checking the receipt. This page updates by itself.</p>
@@ -293,7 +422,7 @@ function renderWaiting() {
 }
 
 function renderMissing() {
-  app.innerHTML = `
+  app.innerHTML = `${topBar()}
     <section class="card stack">
       <h1>Bill not found</h1>
       <p class="muted">This bill has expired or doesn't exist.</p>
@@ -336,9 +465,15 @@ function renderPickName() {
   });
 }
 
+// Installed to the home screen, the app has no browser back button, so every bill page links home.
+function topBar() {
+  return `<nav class="app-bar"><a href="/" class="back" aria-label="Back to your bills">‹ Bills</a></nav>`;
+}
+
 function billHeader() {
   const r = bill.receipt;
   return `
+    ${topBar()}
     <header class="stack">
       <h1>${esc(r.merchant || "The bill")}</h1>
       <p class="muted">${money(r.totalCents)} total · paid by ${esc(bill.payer.name)}
@@ -390,12 +525,15 @@ function renderClaims() {
           <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · claimed ${sum}% in total, split in proportion` : ""}</p>
         </section>`;
     }).join("")}
-    <div class="footer"><div class="row">
+    <div class="action-bar"><div class="row">
       <div><div class="small muted">${isPayer() ? "Your part (you already paid)" : `You owe ${esc(bill.payer.name)}`}</div><div class="big num">≈ ${money(myEstimate())}</div></div>
-      <p class="small muted" style="text-align:right">${unclaimed.length ? `${unclaimed.length} item${unclaimed.length > 1 ? "s" : ""} unclaimed` : "Everything's claimed"}<br>${isPayer() ? "Lock when everyone's done" : `Waiting for ${esc(bill.payer.name)} to lock`}</p>
+      ${bill.isAdmin
+        ? `<button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>${unclaimed.length ? `${unclaimed.length} unclaimed` : "Lock &amp; collect"}</button>`
+        : `<p class="small muted right">${unclaimed.length ? `${unclaimed.length} item${unclaimed.length > 1 ? "s" : ""} unclaimed` : "Everything's claimed"}<br>Waiting for ${esc(bill.payer.name)} to lock</p>`}
     </div></div>`;
 
   app.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => {
+    tapFeedback();
     setMyClaim(b.dataset.claim, Number(b.dataset.pct));
     render();
   }));
@@ -436,15 +574,14 @@ function adminPanel(unclaimed = []) {
   return `
     <section class="card stack">
       <h2>Invite your friends</h2>
-      <div class="row"><input readonly value="${esc(link)}" aria-label="Bill link" id="share-link"><button id="share">Share</button></div>
+      <input type="hidden" value="${esc(link)}" id="share-link">
+      <div class="row two"><button class="primary" id="share">Share link</button><button id="show-qr">Show QR code</button></div>
       <ul class="people">
         ${bill.people.map((p) => `
           <li><span>${esc(p.name)}${p.id === bill.payer.id ? " <span class='muted small'>(you)</span>" : ""}</span>
           ${p.id !== bill.payer.id && p.taken ? `<button class="link small" data-reset="${p.id}">Reset name</button>` : ""}</li>`).join("")}
       </ul>
-      ${bill.status === "open" ? `
-        <button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>Lock &amp; request payment</button>
-        ${unclaimed.length ? `<p class="small muted">Still unclaimed: ${unclaimed.map((i) => esc(i.name)).join(", ")}</p>` : ""}` : ""}
+      ${bill.status === "open" && unclaimed.length ? `<p class="small muted">Still unclaimed: ${unclaimed.map((i) => esc(i.name)).join(", ")}</p>` : ""}
       ${bill.unlockable ? `<button id="unlock">Unlock to change claims</button>` : ""}
     </section>`;
 }
@@ -459,6 +596,7 @@ function bindAdminPanel() {
       toast("Link copied");
     }
   });
+  document.getElementById("show-qr")?.addEventListener("click", () => showQr(document.getElementById("share-link").value));
   app.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm(`Let someone pick "${nameOf(b.dataset.reset)}" again? Their claims stay.`)) return;
     const { ok, data } = await api("POST", `/api/bills/${BILL_ID}/people/${b.dataset.reset}/reset`, {}, adminToken);
@@ -475,6 +613,21 @@ function bindAdminPanel() {
       await refresh();
       render();
     });
+  }
+}
+
+const QR_LIB = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
+async function showQr(url) {
+  const dialog = document.getElementById("qr-dialog");
+  try {
+    if (!window.qrcode) await loadScript(QR_LIB);
+    const qr = window.qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+    dialog.showModal();
+  } catch {
+    toast("Couldn't make a QR code. Use Share link instead.", "error");
   }
 }
 
@@ -621,6 +774,7 @@ async function onApprove({ orderId }) {
 // ---------- Start ----------
 
 async function init() {
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   try {
     config = await (await fetch("/api/config")).json();
   } catch {

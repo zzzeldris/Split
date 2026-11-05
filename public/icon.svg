@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0b57d0"/>
+  <!-- a receipt with a torn bottom edge -->
+  <path d="M152 104h208v292l-26-18-26 18-26-18-26 18-26-18-26 18-26-18-26 18z" fill="#fff"/>
+  <!-- printed lines -->
+  <rect x="184" y="150" width="104" height="18" rx="9" fill="#0b57d0" opacity=".35"/>
+  <rect x="184" y="196" width="144" height="18" rx="9" fill="#0b57d0" opacity=".35"/>
+  <rect x="184" y="242" width="120" height="18" rx="9" fill="#0b57d0" opacity=".35"/>
+  <!-- the split -->
+  <path d="M256 82v330" stroke="#ffc439" stroke-width="20" stroke-linecap="round" stroke-dasharray="1 36"/>
+</svg>

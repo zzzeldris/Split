@@ -4,6 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Split the Bill</title>
+  <meta name="description" content="Snap a receipt, let friends claim what they had, and get paid back with PayPal.">
+
+  <!-- Installable web app: home-screen icon, full screen, no browser bar. -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Split">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#121316" media="(prefers-color-scheme: dark)">
+
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -11,6 +24,14 @@
     <p class="muted">Loading…</p>
   </main>
   <p id="toast" role="status" hidden></p>
+  <dialog id="qr-dialog">
+    <div class="stack" style="justify-items:center; text-align:center">
+      <h2>Scan to join</h2>
+      <div id="qr"></div>
+      <p class="small muted">Friends point their phone camera at this code.</p>
+      <form method="dialog"><button class="primary">Done</button></form>
+    </div>
+  </dialog>
 
   <!-- app.js loads the PayPal SDK itself, using the URL for the environment set on the server. -->
   <script type="module" src="/app.js"></script>
