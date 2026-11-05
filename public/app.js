@@ -126,24 +126,36 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
-const RECEIPT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>`;
+// Decorative loop for the empty scan card: a receipt is scanned, splits into coins and each coin
+// flies to a friend with their share. Pure SVG + CSS (see .split-anim in style.css).
+const SPLIT_ANIMATION = `
+  <svg class="split-anim" viewBox="0 0 200 190" aria-hidden="true" focusable="false">
+    <g class="sa-receipt">
+      <path d="M68 4h64v80l-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6z"/>
+      <path class="sa-lines" d="M78 20h30M78 32h44M78 44h36M78 56h44M78 68h22"/>
+    </g>
+    <rect class="sa-scan" x="64" y="4" width="72" height="3" rx="1.5"/>
+    ${[["a", -64], ["b", 0], ["c", 64]].map(([k, dx]) => `
+      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:94px"><circle cx="100" cy="46" r="10"/><text x="100" y="50.5">$</text></g>`).join("")}
+    ${[["a", 36, "A", "$12.40"], ["b", 100, "B", "$18.20"], ["c", 164, "C", "$9.10"]].map(([k, x, who, amount]) => `
+      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="140" r="16"/><text x="${x}" y="145">${who}</text></g>
+      <text class="sa-amount sa-${k}" x="${x}" y="177">${amount}</text>`).join("")}
+  </svg>`;
 
 function renderCreate() {
   app.innerHTML = `
     <form class="stack" id="create">
       <div class="scan-card" id="scan-card">
-        <video id="cam" playsinline muted autoplay hidden></video>
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">
-          ${RECEIPT_ICON}
+          ${SPLIT_ANIMATION}
           <p>Place your receipt inside the frame</p>
         </div>
       </div>
-      <div class="scan-action">
-        <button type="button" class="scan-btn" id="scan-btn" aria-label="Open camera">${CAMERA_ICON}</button>
+      <label class="scan-action">
+        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
         <span id="scan-label">Scan receipt</span>
-        <label class="link small file-pick">Or choose a photo<input class="visually-hidden" name="photo" type="file" accept="image/*"></label>
-      </div>
+      </label>
       <section class="card stack" id="details" hidden>
         ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
         <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
@@ -154,88 +166,26 @@ function renderCreate() {
       </section>
     </form>`;
 
-  // Camera: the first tap opens a live viewfinder in the frame, the second takes the picture. The photo
-  // is put into the file input, so everything after this point is the same as choosing a file.
-  // getUserMedia only works on HTTPS or localhost, and can be denied; then we fall back to the file picker.
+  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
+  // the payer's details. Removing the photo hides them again.
   const photoInput = app.querySelector("input[name=photo]");
   const details = document.getElementById("details");
-  const card = document.getElementById("scan-card");
-  const video = document.getElementById("cam");
   const hint = document.getElementById("scan-hint");
-  const scanBtn = document.getElementById("scan-btn");
-  const scanLabel = document.getElementById("scan-label");
-  let stream = null;
-
-  const setScanLabel = (text) => {
-    scanLabel.textContent = text;
-    scanBtn.setAttribute("aria-label", text);
-  };
-
-  function stopCamera() {
-    stream?.getTracks().forEach((track) => track.stop());
-    stream = null;
-    video.srcObject = null;
-    video.hidden = true;
-    card.classList.remove("live");
-  }
-
-  function clearPhoto() {
-    card.querySelector("img")?.remove();
-    photoInput.value = "";
-    details.hidden = true;
-  }
-
-  async function startCamera() {
-    if (!navigator.mediaDevices?.getUserMedia) return photoInput.click();
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-        audio: false,
-      });
-    } catch {
-      toast("Couldn't open the camera. Choose a photo instead.");
-      return photoInput.click();
-    }
-    clearPhoto();
-    video.srcObject = stream;
-    video.hidden = false;
-    hint.hidden = true;
-    card.classList.add("live");
-    setScanLabel("Take photo");
-    video.play().catch(() => {});
-  }
-
-  function takePhoto() {
-    if (!video.videoWidth) return; // the first frame hasn't arrived yet
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext("2d").drawImage(video, 0, 0);
-    canvas.toBlob((blob) => {
-      if (!blob) return toast("Couldn't take the photo. Try again.", "error");
-      const transfer = new DataTransfer();
-      transfer.items.add(new File([blob], "receipt.jpg", { type: "image/jpeg" }));
-      photoInput.files = transfer.files;
-      photoInput.dispatchEvent(new Event("change"));
-    }, "image/jpeg", 0.92);
-  }
-
-  scanBtn.addEventListener("click", () => (stream ? takePhoto() : startCamera()));
-
-  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
-  // the payer's details. Clearing the photo hides them again.
   photoInput.addEventListener("change", () => {
-    stopCamera();
+    const card = document.getElementById("scan-card");
     card.querySelector("img")?.remove();
     const file = photoInput.files[0];
     details.hidden = !file;
-    hint.hidden = !!file;
-    if (!file) return setScanLabel("Scan receipt");
+    hint.hidden = !!file; // stops the animation behind the photo
+    if (!file) {
+      document.getElementById("scan-label").textContent = "Scan receipt";
+      return;
+    }
     const img = document.createElement("img");
     img.alt = "Your receipt photo";
     img.src = URL.createObjectURL(file);
     card.prepend(img);
-    setScanLabel("Retake photo");
+    document.getElementById("scan-label").textContent = "Retake photo";
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
   });
