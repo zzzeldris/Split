@@ -212,7 +212,7 @@ paypal-button { display: block; width: 100%; }
   border-radius: 28px;
   box-shadow: var(--shadow);
 }
-.scan-hint { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.scan-hint { position: absolute; inset: 0; }
 .scan-card p { max-width: 220px; font-weight: 600; color: var(--muted); }
 .scan-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .corner { position: absolute; width: 30px; height: 30px; border: 0 solid var(--accent); z-index: 1; }
@@ -266,20 +266,20 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
 
 /* Empty scan card: scan the receipt (4-28% of the loop), split it into coins (30-58%), coins land on
    friends who pop and show their share (58-92%). Under reduced motion it is one still frame. */
-.split-anim { width: 100%; max-width: 220px; height: auto; overflow: visible; }
+.split-anim { display: block; width: 100%; height: 100%; }
 .split-anim text { font-family: inherit; text-anchor: middle; font-weight: 700; fill: var(--text); }
-.sa-receipt path { fill: var(--card); stroke: var(--text); stroke-width: 2; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; }
-.sa-receipt .sa-lines { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
+.sa-receipt path { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; }
+.sa-receipt .sa-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
 .sa-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
 .sa-chip circle { stroke: none; }
-.sa-chip text { font-size: 12px; fill: #fff; }
+.sa-chip text { font-size: 16px; fill: #fff; }
 .sa-chip.sa-a circle, .sa-avatar.sa-a circle { --c: #3b82f6; }
 .sa-chip.sa-b circle, .sa-avatar.sa-b circle { --c: #22a06b; }
 .sa-chip.sa-c circle, .sa-avatar.sa-c circle { --c: #e08a1e; }
 .sa-chip circle { fill: var(--c); }
-.sa-avatar circle { fill: var(--accent-soft); stroke: var(--c); stroke-width: 2.5; }
-.sa-avatar text { font-size: 13px; }
-.sa-amount { font-size: 13px; }
+.sa-avatar circle { fill: var(--accent-soft); stroke: var(--c); stroke-width: 3.5; }
+.sa-avatar text { font-size: 18px; }
+.sa-amount { font-size: 16px; }
 .sa-chip, .sa-avatar, .sa-amount { transform-box: fill-box; transform-origin: center; }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -297,7 +297,7 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
   .sa-chip, .sa-scan { display: none; }
 }
 @keyframes sa-receipt { 0%, 28% { transform: scale(1); } 31% { transform: scale(0.95); } 38%, 100% { transform: scale(1); } }
-@keyframes sa-scan { 0%, 4% { opacity: 0; transform: translateY(0); } 6% { opacity: 1; } 26% { opacity: 1; transform: translateY(80px); } 29%, 100% { opacity: 0; transform: translateY(80px); } }
+@keyframes sa-scan { 0%, 4% { opacity: 0; transform: translateY(0); } 6% { opacity: 1; } 26% { opacity: 1; transform: translateY(116px); } 29%, 100% { opacity: 0; transform: translateY(116px); } }
 @keyframes sa-fly {
   0%, 30% { opacity: 0; transform: translate(0, 0) scale(0.4); }
   36% { opacity: 1; transform: translate(0, 0) scale(1); }
@@ -305,4 +305,4 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
   62%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); }
 }
 @keyframes sa-pop { 0%, 56% { transform: scale(1); } 62% { transform: scale(1.18); } 70%, 100% { transform: scale(1); } }
-@keyframes sa-amount { 0%, 60% { opacity: 0; transform: translateY(4px); } 68%, 92% { opacity: 1; transform: translateY(0); } 98%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sa-amount { 0%, 60% { opacity: 0; transform: translateY(6px); } 68%, 92% { opacity: 1; transform: translateY(0); } 98%, 100% { opacity: 0; transform: translateY(0); } }

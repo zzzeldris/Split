@@ -126,20 +126,20 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
-// Decorative loop for the empty scan card: a receipt is scanned, splits into coins and each coin
+// Decorative loop that fills the empty scan card: a receipt is scanned, splits into coins and each coin
 // flies to a friend with their share. Pure SVG + CSS (see .split-anim in style.css).
 const SPLIT_ANIMATION = `
-  <svg class="split-anim" viewBox="0 0 200 190" aria-hidden="true" focusable="false">
+  <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
     <g class="sa-receipt">
-      <path d="M68 4h64v80l-8-6-8 6-8-6-8 6-8-6-8 6-8-6-8 6z"/>
-      <path class="sa-lines" d="M78 20h30M78 32h44M78 44h36M78 56h44M78 68h22"/>
+      <path d="M100 30h100v120l-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8z"/>
+      <path class="sa-lines" d="M114 52h44M114 70h72M114 88h58M114 106h72M114 124h36"/>
     </g>
-    <rect class="sa-scan" x="64" y="4" width="72" height="3" rx="1.5"/>
-    ${[["a", -64], ["b", 0], ["c", 64]].map(([k, dx]) => `
-      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:94px"><circle cx="100" cy="46" r="10"/><text x="100" y="50.5">$</text></g>`).join("")}
-    ${[["a", 36, "A", "$12.40"], ["b", 100, "B", "$18.20"], ["c", 164, "C", "$9.10"]].map(([k, x, who, amount]) => `
-      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="140" r="16"/><text x="${x}" y="145">${who}</text></g>
-      <text class="sa-amount sa-${k}" x="${x}" y="177">${amount}</text>`).join("")}
+    <rect class="sa-scan" x="94" y="30" width="112" height="4" rx="2"/>
+    ${[["a", -78], ["b", 0], ["c", 78]].map(([k, dx]) => `
+      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:148px"><circle cx="150" cy="78" r="14"/><text x="150" y="83.5">$</text></g>`).join("")}
+    ${[["a", 72, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 228, "C", "$9.10"]].map(([k, x, who, amount]) => `
+      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="226" r="24"/><text x="${x}" y="232">${who}</text></g>
+      <text class="sa-amount sa-${k}" x="${x}" y="270">${amount}</text>`).join("")}
   </svg>`;
 
 function renderCreate() {
@@ -149,7 +149,6 @@ function renderCreate() {
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">
           ${SPLIT_ANIMATION}
-          <p>Place your receipt inside the frame</p>
         </div>
       </div>
       <label class="scan-action">
