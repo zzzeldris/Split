@@ -212,9 +212,11 @@ paypal-button { display: block; width: 100%; }
   border-radius: 28px;
   box-shadow: var(--shadow);
 }
+.scan-hint { display: flex; flex-direction: column; align-items: center; gap: 14px; }
 .scan-card svg { width: 56px; height: 56px; }
 .scan-card p { max-width: 220px; font-weight: 600; color: var(--muted); }
-.scan-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scan-card img, .scan-card video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.scan-card.live { aspect-ratio: 3 / 4; } /* receipts are tall, and so is a phone's camera frame */
 .corner { position: absolute; width: 30px; height: 30px; border: 0 solid var(--accent); z-index: 1; }
 .corner.tl { top: 20px; left: 20px; border-top-width: 4px; border-left-width: 4px; border-top-left-radius: 12px; }
 .corner.tr { top: 20px; right: 20px; border-top-width: 4px; border-right-width: 4px; border-top-right-radius: 12px; }
@@ -225,6 +227,8 @@ paypal-button { display: block; width: 100%; }
 .scan-btn {
   width: 88px; height: 88px;
   display: flex; align-items: center; justify-content: center;
+  padding: 0;
+  border: 0;
   color: var(--accent-text);
   background: var(--accent);
   border-radius: 50%;
@@ -232,7 +236,6 @@ paypal-button { display: block; width: 100%; }
   cursor: pointer;
 }
 .scan-btn svg { width: 36px; height: 36px; }
-.scan-btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .divider { display: flex; align-items: center; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
@@ -263,3 +266,6 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
   button:not(:disabled):active, .scan-btn:active { scale: 0.96; }
   button.link:active { scale: 1; }
 }
+
+.file-pick { position: relative; color: var(--accent); text-decoration: underline; cursor: pointer; }
+.file-pick:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }

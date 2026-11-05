@@ -15,6 +15,7 @@ let bill = null; // the server's view of the bill
 let me = null; // { personId, token } for this device
 let adminToken = null;
 let myClaims = {}; // this device's claims; the source of truth while editing
+let zeroed = {}; // items this device explicitly set to 0%, so the 0% chip can show as chosen (the server stores no 0 claims)
 let draft = null; // the payer's editable receipt while reviewing
 let renderPending = false;
 let pointerDown = false; // a tap is in progress: re-rendering now would swallow its click
@@ -71,6 +72,8 @@ function forgetMe() {
   me = null;
   myClaims = {};
   storage.del(`person:${BILL_ID}`);
+  zeroed = {};
+  storage.del(`zero:${BILL_ID}`);
 }
 
 let pollTimer;
@@ -129,14 +132,18 @@ function renderCreate() {
   app.innerHTML = `
     <form class="stack" id="create">
       <div class="scan-card" id="scan-card">
+        <video id="cam" playsinline muted autoplay hidden></video>
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
-        ${RECEIPT_ICON}
-        <p>Place your receipt inside the frame</p>
+        <div class="scan-hint" id="scan-hint">
+          ${RECEIPT_ICON}
+          <p>Place your receipt inside the frame</p>
+        </div>
       </div>
-      <label class="scan-action">
-        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
+      <div class="scan-action">
+        <button type="button" class="scan-btn" id="scan-btn" aria-label="Open camera">${CAMERA_ICON}</button>
         <span id="scan-label">Scan receipt</span>
-      </label>
+        <label class="link small file-pick">Or choose a photo<input class="visually-hidden" name="photo" type="file" accept="image/*"></label>
+      </div>
       <section class="card stack" id="details" hidden>
         ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
         <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
@@ -147,24 +154,88 @@ function renderCreate() {
       </section>
     </form>`;
 
-  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
-  // the payer's details. Removing the photo hides them again.
+  // Camera: the first tap opens a live viewfinder in the frame, the second takes the picture. The photo
+  // is put into the file input, so everything after this point is the same as choosing a file.
+  // getUserMedia only works on HTTPS or localhost, and can be denied; then we fall back to the file picker.
   const photoInput = app.querySelector("input[name=photo]");
   const details = document.getElementById("details");
+  const card = document.getElementById("scan-card");
+  const video = document.getElementById("cam");
+  const hint = document.getElementById("scan-hint");
+  const scanBtn = document.getElementById("scan-btn");
+  const scanLabel = document.getElementById("scan-label");
+  let stream = null;
+
+  const setScanLabel = (text) => {
+    scanLabel.textContent = text;
+    scanBtn.setAttribute("aria-label", text);
+  };
+
+  function stopCamera() {
+    stream?.getTracks().forEach((track) => track.stop());
+    stream = null;
+    video.srcObject = null;
+    video.hidden = true;
+    card.classList.remove("live");
+  }
+
+  function clearPhoto() {
+    card.querySelector("img")?.remove();
+    photoInput.value = "";
+    details.hidden = true;
+  }
+
+  async function startCamera() {
+    if (!navigator.mediaDevices?.getUserMedia) return photoInput.click();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+    } catch {
+      toast("Couldn't open the camera. Choose a photo instead.");
+      return photoInput.click();
+    }
+    clearPhoto();
+    video.srcObject = stream;
+    video.hidden = false;
+    hint.hidden = true;
+    card.classList.add("live");
+    setScanLabel("Take photo");
+    video.play().catch(() => {});
+  }
+
+  function takePhoto() {
+    if (!video.videoWidth) return; // the first frame hasn't arrived yet
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (!blob) return toast("Couldn't take the photo. Try again.", "error");
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([blob], "receipt.jpg", { type: "image/jpeg" }));
+      photoInput.files = transfer.files;
+      photoInput.dispatchEvent(new Event("change"));
+    }, "image/jpeg", 0.92);
+  }
+
+  scanBtn.addEventListener("click", () => (stream ? takePhoto() : startCamera()));
+
+  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
+  // the payer's details. Clearing the photo hides them again.
   photoInput.addEventListener("change", () => {
-    const card = document.getElementById("scan-card");
+    stopCamera();
     card.querySelector("img")?.remove();
     const file = photoInput.files[0];
     details.hidden = !file;
-    if (!file) {
-      document.getElementById("scan-label").textContent = "Scan receipt";
-      return;
-    }
+    hint.hidden = !!file;
+    if (!file) return setScanLabel("Scan receipt");
     const img = document.createElement("img");
     img.alt = "Your receipt photo";
     img.src = URL.createObjectURL(file);
     card.prepend(img);
-    document.getElementById("scan-label").textContent = "Retake photo";
+    setScanLabel("Retake photo");
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
   });
@@ -447,7 +518,7 @@ function renderClaims() {
         <section class="card item ${rows.length === 0 && item.priceCents > 0 ? "unclaimed" : ""}">
           <div class="row"><strong>${esc(item.name)}${item.quantity !== 1 ? ` <span class="muted">× ${item.quantity}</span>` : ""}</strong><span class="num">${money(item.priceCents)}</span></div>
           <div class="chips" role="group" aria-label="Your share of ${esc(item.name)}">
-            ${chips.map((c) => `<button data-claim="${item.id}" data-pct="${c}" aria-pressed="${c > 0 && mine === c}">${c}%</button>`).join("")}
+            ${chips.map((c) => `<button data-claim="${item.id}" data-pct="${c}" aria-pressed="${c === 0 ? mine === 0 && zeroed[item.id] === true : mine === c}">${c}%</button>`).join("")}
             <input aria-label="Custom percent for ${esc(item.name)}" data-custom="${item.id}" inputmode="numeric" placeholder="%" value="${chips.includes(mine) ? "" : mine}">
           </div>
           <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · claimed ${sum}% in total, split in proportion` : ""}</p>
@@ -459,7 +530,7 @@ function renderClaims() {
     </div></div>`;
 
   app.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => {
-    setMyClaim(b.dataset.claim, Number(b.dataset.pct));
+    setMyClaim(b.dataset.claim, Number(b.dataset.pct), b.dataset.pct === "0");
     render();
   }));
   app.querySelectorAll("[data-custom]").forEach((input) => input.addEventListener("input", () => {
@@ -471,9 +542,12 @@ function renderClaims() {
 }
 
 let saveTimer;
-function setMyClaim(itemId, pct) {
+function setMyClaim(itemId, pct, explicitZero = false) {
   if (pct > 0) myClaims[itemId] = pct;
   else delete myClaims[itemId];
+  if (explicitZero) zeroed[itemId] = true;
+  else delete zeroed[itemId];
+  storage.set(`zero:${BILL_ID}`, zeroed);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveClaims, 400);
 }
@@ -699,6 +773,7 @@ async function init() {
   }
   adminToken = storage.get(`admin:${BILL_ID}`);
   me = storage.get(`person:${BILL_ID}`);
+  zeroed = storage.get(`zero:${BILL_ID}`) ?? {};
 
   try {
     await refresh();
