@@ -7,6 +7,7 @@ const app = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const params = new URLSearchParams(location.search);
 const BILL_ID = params.get("b");
+const SHOW_LOGIN = params.has("login");
 const POLL_MS = 2500;
 
 let config;
@@ -103,7 +104,7 @@ function render() {
     return;
   }
   renderPending = false;
-  if (!BILL_ID) return renderCreate();
+  if (!BILL_ID) return SHOW_LOGIN ? renderLogin() : renderCreate();
   if (!bill) return renderMissing();
   if (bill.status === "draft") return bill.isAdmin ? renderReview() : renderWaiting();
   if (bill.status === "open") return me ? renderClaims() : renderPickName();
@@ -120,21 +121,53 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 // ---------- Create ----------
 
+const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+const RECEIPT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>`;
+
 function renderCreate() {
   app.innerHTML = `
-    <header class="stack">
-      <h1>Split the bill</h1>
-      <p class="muted">Snap the receipt. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
-    </header>
-    <form class="card stack" id="create">
-      ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
-      <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
-      <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
-      <label>Receipt photo<input name="photo" type="file" accept="image/*" required></label>
-      <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details.</p>
-      <button class="primary" type="submit">Read receipt</button>
-      <p class="error-text small" id="create-error"></p>
+    <form class="stack" id="create">
+      <div class="scan-card" id="scan-card">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        ${RECEIPT_ICON}
+        <p>Place your receipt inside the frame</p>
+      </div>
+      <label class="scan-action">
+        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
+        <span id="scan-label">Scan receipt</span>
+      </label>
+      <section class="card stack" id="details" hidden>
+        ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
+        <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
+        <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
+        <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
+        <button class="primary" type="submit">Read receipt</button>
+        <p class="error-text small" id="create-error"></p>
+      </section>
     </form>`;
+
+  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
+  // the payer's details. Removing the photo hides them again.
+  const photoInput = app.querySelector("input[name=photo]");
+  const details = document.getElementById("details");
+  photoInput.addEventListener("change", () => {
+    const card = document.getElementById("scan-card");
+    card.querySelector("img")?.remove();
+    const file = photoInput.files[0];
+    details.hidden = !file;
+    if (!file) {
+      document.getElementById("scan-label").textContent = "Scan receipt";
+      return;
+    }
+    const img = document.createElement("img");
+    img.alt = "Your receipt photo";
+    img.src = URL.createObjectURL(file);
+    card.prepend(img);
+    document.getElementById("scan-label").textContent = "Retake photo";
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+  });
 
   const form = document.getElementById("create");
   form.addEventListener("submit", async (event) => {
@@ -184,6 +217,27 @@ async function resizeImage(file) {
   return { mimeType: "image/jpeg", data: dataUrl.slice(dataUrl.indexOf(",") + 1) };
 }
 
+// ---------- Log in (placeholder) ----------
+// Planned: "Log in with PayPal" (OAuth) so the payer doesn't re-enter their name and email.
+// Not wired up yet, so the button only says so.
+
+function renderLogin() {
+  app.innerHTML = `
+    <a class="icon-btn left" href="/" aria-label="Back to scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </a>
+    <section class="card stack" style="gap:20px">
+      <div class="stack">
+        <h1>Log in</h1>
+        <p class="muted">Log in once with PayPal, so you don't have to enter your details each time you split a bill.</p>
+      </div>
+      <button class="primary" id="paypal-login">Continue with PayPal</button>
+      <div class="divider">or</div>
+      <a href="/" class="small" style="text-align:center">Keep going without logging in</a>
+    </section>`;
+  document.getElementById("paypal-login").addEventListener("click", () => toast("PayPal login isn't connected yet."));
+}
+
 // ---------- Review (payer, draft) ----------
 
 function draftTotals() {
@@ -205,21 +259,32 @@ function renderReview() {
   }
   const tipPcts = [15, 18, 20];
 
+  const matches = checks.length === 0;
   app.innerHTML = `
     <header class="stack">
       <h1>Check the receipt</h1>
       <p class="muted">Gemini read this from your photo. Fix anything it got wrong before your friends claim items.</p>
+      <button class="link small" id="photo" style="justify-self:start">View receipt photo</button>
     </header>
+    ${matches
+      ? `<p class="notice ok">✓ The totals match the receipt.</p>`
+      : checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
-      <div class="edit-row small muted"><span>Item</span><span>Qty</span><span>Price</span><span></span></div>
-      ${draft.items.map((item, i) => `
-        <div class="edit-row">
-          <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80">
-          <input aria-label="Quantity" data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal">
-          <input aria-label="Price" class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal">
-          <button aria-label="Remove ${esc(item.name)}" data-remove="${i}">✕</button>
-        </div>`).join("")}
+      <h2 class="section-title">Items</h2>
+      <div class="edit-list">
+        ${draft.items.map((item, i) => `
+          <div class="edit-item">
+            <div class="edit-top">
+              <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80" placeholder="Item name">
+              <button class="icon-only" aria-label="Remove ${esc(item.name) || "item"}" data-remove="${i}">${CLOSE_ICON}</button>
+            </div>
+            <div class="edit-bottom">
+              <label class="mini">Qty<input data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal"></label>
+              <label class="mini">Price<input class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal"></label>
+            </div>
+          </div>`).join("")}
+      </div>
       <button id="add-item">+ Add item</button>
     </section>
     <section class="card stack">
@@ -227,19 +292,17 @@ function renderReview() {
       <div class="money-row"><label for="discount">Discount</label><input id="discount" class="num" data-money="discountCents" value="${dollarsText(draft.discountCents)}" inputmode="decimal"></div>
       <div class="money-row"><span>Subtotal</span><span class="num">${money(t.subtotal)}</span></div>
       <div class="money-row"><label for="tax">Tax</label><input id="tax" class="num" data-money="taxCents" value="${dollarsText(draft.taxCents)}" inputmode="decimal"></div>
-      <div class="stack">
-        <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
-        <div class="chips" role="group" aria-label="Tip percentage">
-          ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
-          <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
-        </div>
+      <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
+      <div class="chips" role="group" aria-label="Tip percentage">
+        ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
+        <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
       </div>
-      <div class="money-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
-      ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("") || `<p class="notice ok">Matches the receipt.</p>`}
+      <div class="money-row total-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
     </section>
-    <button class="primary" id="open">Looks right: let friends claim items</button>
-    <p class="error-text small" id="review-error"></p>
-    <button class="link small" id="photo">View receipt photo</button>`;
+    <div class="footer"><div class="stack">
+      <p class="error-text small" id="review-error"></p>
+      <button class="primary" id="open">Looks right: let friends claim items</button>
+    </div></div>`;
 
   // Typing updates the draft without re-rendering (so the field keeps focus); leaving it re-renders totals.
   app.querySelectorAll("input[data-item]").forEach((input) =>
