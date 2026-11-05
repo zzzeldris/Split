@@ -7,6 +7,7 @@ const app = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const params = new URLSearchParams(location.search);
 const BILL_ID = params.get("b");
+const SHOW_LOGIN = params.has("login");
 const POLL_MS = 2500;
 
 let config;
@@ -103,7 +104,7 @@ function render() {
     return;
   }
   renderPending = false;
-  if (!BILL_ID) return renderCreate();
+  if (!BILL_ID) return SHOW_LOGIN ? renderLogin() : renderCreate();
   if (!bill) return renderMissing();
   if (bill.status === "draft") return bill.isAdmin ? renderReview() : renderWaiting();
   if (bill.status === "open") return me ? renderClaims() : renderPickName();
@@ -120,21 +121,44 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 // ---------- Create ----------
 
+const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+const RECEIPT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>`;
+
 function renderCreate() {
   app.innerHTML = `
-    <header class="stack">
-      <h1>Split the bill</h1>
-      <p class="muted">Snap the receipt. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
-    </header>
-    <form class="card stack" id="create">
-      ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
-      <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
-      <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
-      <label>Receipt photo<input name="photo" type="file" accept="image/*" required></label>
-      <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details.</p>
-      <button class="primary" type="submit">Read receipt</button>
-      <p class="error-text small" id="create-error"></p>
+    <form class="stack" id="create">
+      <div class="scan-card" id="scan-card">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        ${RECEIPT_ICON}
+        <p>Place your receipt inside the frame</p>
+      </div>
+      <label class="scan-action">
+        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
+        <span id="scan-label">Scan receipt</span>
+      </label>
+      <section class="card stack">
+        ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
+        <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
+        <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
+        <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
+        <button class="primary" type="submit">Read receipt</button>
+        <p class="error-text small" id="create-error"></p>
+      </section>
     </form>`;
+
+  // Show the chosen photo inside the frame so you can see what will be read.
+  const photoInput = app.querySelector("input[name=photo]");
+  photoInput.addEventListener("change", () => {
+    const card = document.getElementById("scan-card");
+    card.querySelector("img")?.remove();
+    const file = photoInput.files[0];
+    if (!file) return;
+    const img = document.createElement("img");
+    img.alt = "Your receipt photo";
+    img.src = URL.createObjectURL(file);
+    card.prepend(img);
+    document.getElementById("scan-label").textContent = "Retake photo";
+  });
 
   const form = document.getElementById("create");
   form.addEventListener("submit", async (event) => {
@@ -182,6 +206,27 @@ async function resizeImage(file) {
     reader.readAsDataURL(blob);
   });
   return { mimeType: "image/jpeg", data: dataUrl.slice(dataUrl.indexOf(",") + 1) };
+}
+
+// ---------- Log in (placeholder) ----------
+// Planned: "Log in with PayPal" (OAuth) so the payer doesn't re-enter their name and email.
+// Not wired up yet, so the button only says so.
+
+function renderLogin() {
+  app.innerHTML = `
+    <a class="icon-btn left" href="/" aria-label="Back to scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </a>
+    <section class="card stack" style="gap:20px">
+      <div class="stack">
+        <h1>Log in</h1>
+        <p class="muted">Log in once with PayPal, so you don't have to enter your details each time you split a bill.</p>
+      </div>
+      <button class="primary" id="paypal-login">Continue with PayPal</button>
+      <div class="divider">or</div>
+      <a href="/" class="small" style="text-align:center">Keep going without logging in</a>
+    </section>`;
+  document.getElementById("paypal-login").addEventListener("click", () => toast("PayPal login isn't connected yet."));
 }
 
 // ---------- Review (payer, draft) ----------
