@@ -121,6 +121,7 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 // ---------- Create ----------
 
+const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
 const RECEIPT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h14v18l-2.5-1.6L14 21l-2-1.6L10 21l-2.5-1.6L5 21z"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>`;
 
@@ -258,21 +259,32 @@ function renderReview() {
   }
   const tipPcts = [15, 18, 20];
 
+  const matches = checks.length === 0;
   app.innerHTML = `
     <header class="stack">
       <h1>Check the receipt</h1>
       <p class="muted">Gemini read this from your photo. Fix anything it got wrong before your friends claim items.</p>
+      <button class="link small" id="photo" style="justify-self:start">View receipt photo</button>
     </header>
+    ${matches
+      ? `<p class="notice ok">✓ The totals match the receipt.</p>`
+      : checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
-      <div class="edit-row small muted"><span>Item</span><span>Qty</span><span>Price</span><span></span></div>
-      ${draft.items.map((item, i) => `
-        <div class="edit-row">
-          <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80">
-          <input aria-label="Quantity" data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal">
-          <input aria-label="Price" class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal">
-          <button aria-label="Remove ${esc(item.name)}" data-remove="${i}">✕</button>
-        </div>`).join("")}
+      <h2 class="section-title">Items</h2>
+      <div class="edit-list">
+        ${draft.items.map((item, i) => `
+          <div class="edit-item">
+            <div class="edit-top">
+              <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80" placeholder="Item name">
+              <button class="icon-only" aria-label="Remove ${esc(item.name) || "item"}" data-remove="${i}">${CLOSE_ICON}</button>
+            </div>
+            <div class="edit-bottom">
+              <label class="mini">Qty<input data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal"></label>
+              <label class="mini">Price<input class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal"></label>
+            </div>
+          </div>`).join("")}
+      </div>
       <button id="add-item">+ Add item</button>
     </section>
     <section class="card stack">
@@ -280,19 +292,17 @@ function renderReview() {
       <div class="money-row"><label for="discount">Discount</label><input id="discount" class="num" data-money="discountCents" value="${dollarsText(draft.discountCents)}" inputmode="decimal"></div>
       <div class="money-row"><span>Subtotal</span><span class="num">${money(t.subtotal)}</span></div>
       <div class="money-row"><label for="tax">Tax</label><input id="tax" class="num" data-money="taxCents" value="${dollarsText(draft.taxCents)}" inputmode="decimal"></div>
-      <div class="stack">
-        <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
-        <div class="chips" role="group" aria-label="Tip percentage">
-          ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
-          <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
-        </div>
+      <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
+      <div class="chips" role="group" aria-label="Tip percentage">
+        ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
+        <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
       </div>
-      <div class="money-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
-      ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("") || `<p class="notice ok">Matches the receipt.</p>`}
+      <div class="money-row total-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
     </section>
-    <button class="primary" id="open">Looks right: let friends claim items</button>
-    <p class="error-text small" id="review-error"></p>
-    <button class="link small" id="photo">View receipt photo</button>`;
+    <div class="footer"><div class="stack">
+      <p class="error-text small" id="review-error"></p>
+      <button class="primary" id="open">Looks right: let friends claim items</button>
+    </div></div>`;
 
   // Typing updates the draft without re-rendering (so the field keeps focus); leaving it re-renders totals.
   app.querySelectorAll("input[data-item]").forEach((input) =>
