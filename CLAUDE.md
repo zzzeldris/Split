@@ -25,7 +25,7 @@ A user photographs a receipt. AI (Gemini) reads it into structured items. The ap
 - Run the server with `npm start` (uses `node --env-file-if-exists=.env`, so it also starts on a host with no `.env`. Needs Node ≥ 22.9). Standalone scripts load `.env` via `import "dotenv/config"`.
 
 ## Secrets
-- `.env` holds `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `GEMINI_API_KEY` and `PORT`, and optionally `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` and `DEMO_PASSCODE`. Without a passcode, anyone can create bills (and spend the Gemini quota), so always set it on the deployed host. It's gitignored, and the repo will be public, so never commit keys or print them.
+- `.env` holds `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `GEMINI_API_KEY` and `PORT`, and optionally `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` and `DEMO_PASSCODE`. The deployed demo runs **without** a passcode on purpose, so anyone can create bills. That means visitors can spend the free Gemini quota. If abuse starts, set `DEMO_PASSCODE` on Render again; the code still supports it. It's gitignored, and the repo will be public, so never commit keys or print them.
 - Call Gemini only from the server, never from browser code.
 - The Gemini key is on the **free tier**, so Google may use the data it receives for training. Test only with harmless receipts. Don't use real personal or card data.
 
