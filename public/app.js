@@ -136,7 +136,7 @@ function renderCreate() {
         <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
         <span id="scan-label">Scan receipt</span>
       </label>
-      <section class="card stack">
+      <section class="card stack" id="details" hidden>
         ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
         <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
         <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
@@ -146,18 +146,26 @@ function renderCreate() {
       </section>
     </form>`;
 
-  // Show the chosen photo inside the frame so you can see what will be read.
+  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
+  // the payer's details. Removing the photo hides them again.
   const photoInput = app.querySelector("input[name=photo]");
+  const details = document.getElementById("details");
   photoInput.addEventListener("change", () => {
     const card = document.getElementById("scan-card");
     card.querySelector("img")?.remove();
     const file = photoInput.files[0];
-    if (!file) return;
+    details.hidden = !file;
+    if (!file) {
+      document.getElementById("scan-label").textContent = "Scan receipt";
+      return;
+    }
     const img = document.createElement("img");
     img.alt = "Your receipt photo";
     img.src = URL.createObjectURL(file);
     card.prepend(img);
     document.getElementById("scan-label").textContent = "Retake photo";
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
   });
 
   const form = document.getElementById("create");

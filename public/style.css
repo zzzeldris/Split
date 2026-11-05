@@ -38,6 +38,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; } /* class display rules (.stack, .row) must not beat the hidden attribute */
 
 body {
   margin: 0;
@@ -218,3 +219,29 @@ paypal-button { display: block; width: 100%; }
 
 .divider { display: flex; align-items: center; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
 .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+
+/* Details appear once, after the photo is taken: opacity + 4px blur + 12px rise over 300ms.
+   Under reduced motion it is a plain fade. The hidden state lives in the "from" keyframe. */
+#details:not([hidden]) { animation: details-in 300ms ease-out both; }
+@keyframes details-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes details-in {
+    from { opacity: 0; filter: blur(4px); transform: translateY(12px); }
+    to { opacity: 1; filter: blur(0); transform: translateY(0); }
+  }
+}
+
+/* Receipt preview: 1px pure black/white outline inset by 1px so the photo's edge stays crisp */
+.scan-card img { outline: 1px solid oklch(0 0 0 / 0.1); outline-offset: -1px; }
+@media (prefers-color-scheme: dark) {
+  .scan-card img { outline-color: oklch(1 0 0 / 0.1); }
+}
+
+/* Press feedback: 0.96 over 150ms, never on a disabled button. These buttons draw their own pressed
+   state, so the default tap flash is switched off. */
+button, .scan-btn { -webkit-tap-highlight-color: transparent; }
+@media (prefers-reduced-motion: no-preference) {
+  button, .scan-btn { transition-property: scale; transition-duration: 150ms; transition-timing-function: ease-out; }
+  button:not(:disabled):active, .scan-btn:active { scale: 0.96; }
+  button.link:active { scale: 1; }
+}
