@@ -158,14 +158,7 @@ async function handleWebhook(req, res) {
 
 // ---------- HTTP server ----------
 
-const MIME = {
-  ".html": "text/html",
-  ".js": "text/javascript",
-  ".css": "text/css",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".webmanifest": "application/manifest+json",
-};
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
 const LIB_DIR = join(import.meta.dirname, "lib");
 // lib/ files the browser imports (the same split math the server uses). Nothing else in lib/ is served.
 const BROWSER_LIB = new Set(["/lib/split.js", "/lib/shares.js"]);
@@ -217,9 +210,7 @@ async function serveStatic(req, res) {
 
   try {
     const file = await readFile(filePath);
-    // no-cache = "check with the server first". Phones then pick up a new deploy at once,
-    // and the service worker (sw.js) can never get stuck on an old copy of itself.
-    res.writeHead(200, { "Content-Type": MIME[extname(filePath)] ?? "application/octet-stream", "Cache-Control": "no-cache" });
+    res.writeHead(200, { "Content-Type": MIME[extname(filePath)] ?? "application/octet-stream" });
     res.end(file);
   } catch {
     sendJson(res, 404, { error: "Not found" });

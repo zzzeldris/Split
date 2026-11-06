@@ -82,7 +82,6 @@ async function refresh() {
   if (status !== 200) throw Object.assign(new Error(data?.error ?? "Couldn't load the bill"), { status });
   bill = data;
   if (me && !bill.people.some((p) => p.id === me.personId)) forgetMe();
-  if (me || bill.isAdmin) rememberBill(BILL_ID, { merchant: bill.receipt.merchant, totalCents: bill.receipt.totalCents, status: bill.status });
   return true;
 }
 
@@ -140,19 +139,7 @@ const releasePointer = () => setTimeout(() => {
 document.addEventListener("pointerup", releasePointer, true);
 document.addEventListener("pointercancel", releasePointer, true);
 
-// ---------- Create (home screen) ----------
-
-// The payer's name and email are remembered, so next time a photo is all it takes.
-const profile = () => storage.get("profile") ?? {};
-// Bills this device created or joined, newest first, so the home screen can reopen them.
-const recentBills = () => storage.get("recent") ?? [];
-function rememberBill(id, info) {
-  const old = recentBills();
-  const entry = { ...(old.find((b) => b.id === id) ?? {}), id, ...info, at: Date.now() };
-  storage.set("recent", [entry, ...old.filter((b) => b.id !== id)].slice(0, 8));
-}
-
-const STATUS_LABEL = { draft: "checking receipt", open: "claiming", locked: "collecting", settled: "settled" };
+// ---------- Create ----------
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
@@ -173,13 +160,8 @@ const SPLIT_ANIMATION = `
   </svg>`;
 
 function renderCreate() {
-  const p = profile();
-  const known = Boolean(p.name && p.email);
-  const recent = recentBills();
-  const savedCode = storage.get("passcode") ?? "";
   app.innerHTML = `
-    ${installBanner()}
-    <form class="stack" id="create" novalidate>
+    <form class="stack" id="create">
       <div class="scan-card" id="scan-card">
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">
@@ -187,102 +169,71 @@ function renderCreate() {
         </div>
       </div>
       <label class="scan-action">
-        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*"></span>
+        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*" required></span>
         <span id="scan-label">Scan receipt</span>
       </label>
       <section class="card stack" id="details" hidden>
-        ${known ? `
-          <div class="row" id="known-details">
-            <div><div class="small muted">Friends pay you back at</div><strong>${esc(p.name)}</strong> <span class="small muted">${esc(p.email)}</span></div>
-            <button type="button" class="link small" id="edit-details">Change</button>
-          </div>` : ""}
-        <div class="stack" id="detail-fields" ${known ? "hidden" : ""}>
-          <label>Your name<input name="name" required maxlength="30" autocomplete="given-name" value="${esc(p.name ?? "")}"></label>
-          <label>Your PayPal email<input name="email" type="email" required autocomplete="email" value="${esc(p.email ?? "")}"></label>
-        </div>
-        ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off" value="${esc(savedCode)}"></label>` : ""}
+        ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
+        <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
+        <label>Your PayPal email<input name="email" type="email" required autocomplete="email"></label>
         <p class="small muted">Demo: no receipts with personal or card details.</p>
         <button class="primary" type="submit">Read receipt</button>
-        <p class="error-text small" id="create-error" role="alert"></p>
+        <p class="error-text small" id="create-error"></p>
       </section>
-    </form>
-    ${recent.length ? `
-      <section class="card stack">
-        <h2>Your bills</h2>
-        <ul class="people">${recent.map((b) => `
-          <li><a href="/?b=${esc(b.id)}">${esc(b.merchant || "Receipt")}</a>
-          <span class="small muted">${b.totalCents != null ? `${money(b.totalCents)} · ` : ""}${esc(STATUS_LABEL[b.status] ?? "")}</span></li>`).join("")}</ul>
-      </section>` : ""}`;
+    </form>`;
 
-  const form = document.getElementById("create");
-  const errorEl = document.getElementById("create-error");
+  // Show the chosen photo inside the frame so you can see what will be read, and only then ask for
+  // the payer's details. Removing the photo hides them again.
+  const photoInput = app.querySelector("input[name=photo]");
   const details = document.getElementById("details");
-  let photo = null;
-
-  bindInstallBanner();
-  document.getElementById("edit-details")?.addEventListener("click", () => {
-    document.getElementById("known-details").hidden = true;
-    document.getElementById("detail-fields").hidden = false;
-    form.elements.name.focus();
-  });
-
-  // Shows the name/email fields if something is missing, and says whether everything is filled in.
-  const detailsValid = () => {
-    const ok = ["name", "email", "passcode"].every((n) => !form.elements[n] || form.elements[n].checkValidity());
-    if (!ok) {
-      document.getElementById("detail-fields").hidden = false;
-      document.getElementById("known-details")?.setAttribute("hidden", "");
-    }
-    return ok;
-  };
-
-  // Show the chosen photo inside the frame so you can see what will be read. If the payer's details
-  // are remembered, start reading straight away; otherwise ask for them. Removing the photo hides them.
-  form.elements.photo.addEventListener("change", (event) => {
+  const hint = document.getElementById("scan-hint");
+  photoInput.addEventListener("change", () => {
     const card = document.getElementById("scan-card");
     card.querySelector("img")?.remove();
-    photo = event.target.files[0] ?? null;
-    details.hidden = !photo;
-    document.getElementById("scan-hint").hidden = !!photo; // stops the animation behind the photo
-    errorEl.textContent = "";
-    if (!photo) {
+    const file = photoInput.files[0];
+    details.hidden = !file;
+    hint.hidden = !!file; // stops the animation behind the photo
+    if (!file) {
       document.getElementById("scan-label").textContent = "Scan receipt";
       return;
     }
     const img = document.createElement("img");
     img.alt = "Your receipt photo";
-    img.src = URL.createObjectURL(photo);
+    img.src = URL.createObjectURL(file);
     card.prepend(img);
     document.getElementById("scan-label").textContent = "Retake photo";
-    if (detailsValid()) return form.requestSubmit();
     const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
     details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
-    form.querySelector("input:invalid:not([type=file])")?.focus({ preventScroll: true });
   });
 
+  const form = document.getElementById("create");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (!photo) return (errorEl.textContent = "Take a photo of the receipt first.");
-    if (!detailsValid()) return (errorEl.textContent = "Add your name and PayPal email so friends know where to pay.");
+    const button = form.querySelector("button");
+    const errorEl = document.getElementById("create-error");
     const fields = new FormData(form);
-    const busy = showBusy(photo);
+    button.disabled = true;
+    errorEl.textContent = "";
+    const busy = showBusy(fields.get("photo"));
     try {
       busy.step("Shrinking photo…");
-      const image = await resizeImage(photo);
-      busy.step("Reading the receipt with AI…");
-      const payer = { name: fields.get("name").trim(), email: fields.get("email").trim() };
-      const { ok, data } = await api("POST", "/api/bills", { passcode: fields.get("passcode") ?? undefined, payer, image });
+      const image = await resizeImage(fields.get("photo"));
+      busy.step("Reading the receipt with Gemini…");
+      const { ok, data } = await api("POST", "/api/bills", {
+        passcode: fields.get("passcode") ?? undefined,
+        payer: { name: fields.get("name"), email: fields.get("email") },
+        image,
+      });
       if (!ok) throw new Error(data.error ?? "Something went wrong");
-      storage.set("profile", payer);
-      if (fields.get("passcode")) storage.set("passcode", fields.get("passcode"));
       storage.set(`admin:${data.billId}`, data.adminToken);
       storage.set(`person:${data.billId}`, { personId: data.payerId, token: data.payerToken });
-      rememberBill(data.billId, { status: "draft" });
       await busy.reveal(data.found);
       location.href = `/?b=${data.billId}`;
     } catch (err) {
       busy.close();
       errorEl.textContent = err.message;
+      button.disabled = false;
+      button.textContent = "Read receipt";
     }
   });
 }
@@ -319,45 +270,6 @@ function showBusy(photo) {
     },
   };
 }
-
-// ---------- Installing to the home screen ----------
-
-let installPrompt = null; // Android/Chrome: the browser's own install dialog, saved for our button
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  installPrompt = event;
-  if (!BILL_ID) render();
-});
-const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
-function installBanner() {
-  if (isStandalone() || storage.get("install-dismissed")) return "";
-  if (installPrompt) {
-    return `<div class="card row install"><span class="small">Add Split to your home screen for one-tap receipts.</span>
-      <span class="row"><button class="primary" id="install">Install</button><button class="link small" id="install-later">Not now</button></span></div>`;
-  }
-  if (isIOS()) {
-    return `<div class="card row install"><span class="small">Install: tap <strong>Share</strong> <span aria-hidden="true">⎋</span>, then <strong>Add to Home Screen</strong>.</span>
-      <button class="link small" id="install-later">Got it</button></div>`;
-  }
-  return "";
-}
-
-function bindInstallBanner() {
-  document.getElementById("install")?.addEventListener("click", async () => {
-    installPrompt.prompt();
-    await installPrompt.userChoice.catch(() => {});
-    installPrompt = null;
-    render();
-  });
-  document.getElementById("install-later")?.addEventListener("click", () => {
-    storage.set("install-dismissed", true);
-    render();
-  });
-}
-
-const tapFeedback = () => navigator.vibrate?.(8); // a light tick on Android; iPhones ignore it
 
 // Scale to at most 1600 px on the long side and re-encode as JPEG, so uploads stay small.
 async function resizeImage(file) {
@@ -418,7 +330,6 @@ function renderReview() {
   const tipPcts = [15, 18, 20];
 
   app.innerHTML = `
-    ${topBar()}
     <header class="stack">
       <h1>Check the receipt</h1>
       ${bill.hasPhoto ? `<button type="button" class="link small photo-link" data-photo style="justify-self:start">View receipt photo</button>` : ""}
@@ -456,7 +367,7 @@ function renderReview() {
       <div class="money-row total-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
     </section>
     <div class="footer"><div class="stack">
-      <p class="error-text small" id="review-error" role="alert"></p>
+      <p class="error-text small" id="review-error"></p>
       <button class="primary" id="open">Confirm</button>
     </div></div>`;
 
@@ -503,7 +414,7 @@ function renderReview() {
 }
 
 function renderWaiting() {
-  app.innerHTML = `${topBar()}
+  app.innerHTML = `
     <section class="card stack">
       <h1>Almost ready</h1>
       <p class="muted">${esc(bill.payer.name)} is checking the receipt.</p>
@@ -511,7 +422,7 @@ function renderWaiting() {
 }
 
 function renderMissing() {
-  app.innerHTML = `${topBar()}
+  app.innerHTML = `
     <section class="card stack">
       <h1>Bill not found</h1>
       <a href="/">Start a new bill</a>
@@ -553,15 +464,9 @@ function renderPickName() {
   });
 }
 
-// Installed to the home screen, the app has no browser back button, so every bill page links home.
-function topBar() {
-  return `<nav class="app-bar"><a href="/" class="back" aria-label="Back to your bills">‹ Bills</a></nav>`;
-}
-
 function billHeader() {
   const r = bill.receipt;
   return `
-    ${topBar()}
     <header class="stack">
       <h1>${esc(r.merchant || "The bill")}</h1>
       <p class="muted">${money(r.totalCents)} total · paid by ${esc(bill.payer.name)}
@@ -618,7 +523,6 @@ function renderClaims() {
     </div></div>`;
 
   app.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => {
-    tapFeedback();
     setMyClaim(b.dataset.claim, Number(b.dataset.pct), b.dataset.pct === "0");
     render();
   }));
@@ -662,8 +566,7 @@ function adminPanel(unclaimed = []) {
   return `
     <section class="card stack">
       <h2>Invite your friends</h2>
-      <input type="hidden" value="${esc(link)}" id="share-link">
-      <div class="row two"><button class="primary" id="share">Share link</button><button id="show-qr">Show QR code</button></div>
+      <div class="row"><input readonly value="${esc(link)}" aria-label="Bill link" id="share-link"><button id="share">Share</button></div>
       <ul class="people">
         ${bill.people.map((p) => `
           <li><span>${esc(p.name)}${p.id === bill.payer.id ? " <span class='muted small'>(you)</span>" : ""}</span>
@@ -685,7 +588,6 @@ function bindAdminPanel() {
       toast("Link copied");
     }
   });
-  document.getElementById("show-qr")?.addEventListener("click", () => showQr(document.getElementById("share-link").value));
   app.querySelectorAll("[data-reset]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm(`Let someone pick "${nameOf(b.dataset.reset)}" again? Their claims stay.`)) return;
     const { ok, data } = await api("POST", `/api/bills/${BILL_ID}/people/${b.dataset.reset}/reset`, {}, adminToken);
@@ -702,21 +604,6 @@ function bindAdminPanel() {
       await refresh();
       render();
     });
-  }
-}
-
-const QR_LIB = "https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";
-async function showQr(url) {
-  const dialog = document.getElementById("qr-dialog");
-  try {
-    if (!window.qrcode) await loadScript(QR_LIB);
-    const qr = window.qrcode(0, "M");
-    qr.addData(url);
-    qr.make();
-    document.getElementById("qr").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
-    dialog.showModal();
-  } catch {
-    toast("Couldn't make a QR code. Use Share link instead.", "error");
   }
 }
 
@@ -863,7 +750,6 @@ async function onApprove({ orderId }) {
 // ---------- Start ----------
 
 async function init() {
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   try {
     config = await (await fetch("/api/config")).json();
   } catch {
