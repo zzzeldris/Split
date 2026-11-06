@@ -278,8 +278,8 @@ paypal-button { display: block; width: 100%; }
 
 
 /* Empty scan card: a 12s story, 3s per scene (no captions). 1 scan the receipt (0-25%), 2 highlight its item lines (25-50%),
-   3 trim the receipt to just those lines, zoom in and write them out (50-75%), 4 split into coins that reach friends, who show their share and
-   a check mark once collected (75-100%). The base styles below are the last frame, which is what people with
+   3 trim the receipt to just those lines, zoom in and write them out (50-75%), 4 the slice shrinks to the top and splits into one chunk per line, each
+   sent to a person, who shows their share and a check mark (75-100%). The base styles below are the last frame, which is what people with
    reduced motion see. */
 .split-anim { display: block; width: 100%; height: 100%; }
 .split-anim text { font-family: inherit; text-anchor: middle; font-weight: 700; fill: var(--text); }
@@ -292,8 +292,8 @@ paypal-button { display: block; width: 100%; }
 .sb-zoom { transform-box: view-box; transform-origin: 150px 88px; }
 .sb-slice { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
 .sb-zoom text { font-size: 10px; font-weight: 600; }
-.sb-chip circle { fill: var(--c); }
-.sb-chip text { font-size: 12px; fill: #fff; }
+.sb-send rect { fill: var(--card); stroke: var(--text); stroke-width: 2; }
+.sb-send path { fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; }
 .sb-ring { fill: var(--accent-soft); stroke: var(--c); stroke-width: 3.5; }
 .sb-head { fill: none; stroke: var(--text); stroke-width: 2.4; }
 .sb-body { fill: none; stroke: var(--text); stroke-width: 2.4; stroke-linecap: round; }
@@ -301,10 +301,11 @@ paypal-button { display: block; width: 100%; }
 .sb-chk circle { fill: #22a06b; }
 .sb-chk path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .sb-a { --c: #3b82f6; } .sb-b { --c: #22a06b; } .sb-c { --c: #e08a1e; }
-.sb-av, .sb-chip, .sb-chk, .sb-receipt { transform-box: fill-box; transform-origin: center; }
+.sb-av, .sb-chk, .sb-receipt { transform-box: fill-box; transform-origin: center; }
 /* last frame (also the reduced-motion frame) */
-.sb-receipt, .sb-hl, .sb-scan, .sb-chip { opacity: 0; }
-.sb-zoom { transform: translateY(-26px) scale(0.6); }
+.sb-receipt, .sb-hl, .sb-scan { opacity: 0; }
+.sb-zoom { opacity: 0; transform: translateY(-26px) scale(0.6); }
+.sb-send { transform: translate(var(--dx), var(--dy)); }
 
 @media (prefers-reduced-motion: no-preference) {
   .sb-receipt { animation: sb-receipt 12s var(--ease-out) infinite both; }
@@ -314,7 +315,7 @@ paypal-button { display: block; width: 100%; }
   .sb-slice { animation: sb-slice 12s var(--ease-out) infinite both; }
   .sb-row { animation: sb-row 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.15s); }
   .sb-av { animation: sb-av 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
-  .sb-chip { animation: sb-fly 12s var(--ease-in-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-send { animation: sb-send 12s var(--ease-in-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
   .sb-amt { animation: sb-amt 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
   .sb-chk { animation: sb-chk 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
 }
@@ -327,14 +328,14 @@ paypal-button { display: block; width: 100%; }
   80%, 96% { opacity: 1; transform: translateY(-26px) scale(0.6); }
   99%, 100% { opacity: 0; transform: translateY(-26px) scale(0.6); }
 }
-@keyframes sb-slice { 0%, 50% { opacity: 0; } 56%, 96% { opacity: 1; } 99%, 100% { opacity: 0; } }
-@keyframes sb-row { 0%, 54% { opacity: 0; transform: translateY(6px); } 60%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sb-slice { 0%, 50% { opacity: 0; } 56%, 81% { opacity: 1; } 83%, 100% { opacity: 0; } }
+@keyframes sb-row { 0%, 54% { opacity: 0; transform: translateY(6px); } 60%, 81% { opacity: 1; transform: translateY(0); } 83%, 100% { opacity: 0; transform: translateY(0); } }
 @keyframes sb-av { 0%, 75% { opacity: 0; transform: scale(0.9); } 79%, 96% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(1); } }
-@keyframes sb-fly {
-  0%, 80% { opacity: 0; transform: translate(0, 0) scale(0.9); }
-  82% { opacity: 1; transform: translate(0, 0) scale(1); }
-  88% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); }
-  90%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.9); }
+@keyframes sb-send {
+  0%, 81% { opacity: 0; transform: translate(0, 0); }
+  82% { opacity: 1; transform: translate(0, 0); }
+  90%, 96% { opacity: 1; transform: translate(var(--dx), var(--dy)); }
+  99%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)); }
 }
 @keyframes sb-amt { 0%, 86% { opacity: 0; transform: translateY(4px); } 90%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
 @keyframes sb-chk { 0%, 91% { opacity: 0; transform: scale(0.9); } 94%, 96% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(1); } }

@@ -144,7 +144,8 @@ document.addEventListener("pointercancel", releasePointer, true);
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
 // Looping 12s story that fills the empty scan card, one scene per 3s: 1 scan the receipt, 2 annotate its
-// item lines, 3 cut them out as a smaller slice of the receipt with the text written out, 4 split the total and collect it from friends (no captions). Pure SVG + CSS
+// item lines, 3 cut them out as a smaller slice of the receipt with the text written out, 4 the slice splits into one chunk per line, each sent to
+// a person, who then shows their share and a check mark (no captions). Pure SVG + CSS
 // (see .split-anim in style.css); the base styles are the still frame used under reduced motion.
 const SPLIT_ANIMATION = `
   <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
@@ -159,8 +160,16 @@ const SPLIT_ANIMATION = `
       ${[["Poutine", "12.95"], ["Club ×2", "24.00"], ["Iced tea", "4.55"]].map(([name, price], i) => `
         <g class="sb-row" style="--i:${i}"><text class="t-l" x="112" y="${74 + i * 18}">${name}</text><text class="t-r" x="188" y="${74 + i * 18}">${price}</text></g>`).join("")}
     </g>
-    ${[["a", -80], ["b", 0], ["c", 80]].map(([k, dx], i) => `
-      <g class="sb-chip sb-${k}" style="--dx:${dx}px;--dy:136px;--i:${i}"><circle cx="150" cy="70" r="10"/><text x="150" y="74">$</text></g>`).join("")}
+    ${[-80, 0, 80].map((dx, i) => {
+      // Each line of the small slice (where it sits once the slice has shrunk to the top) is cut out as its
+      // own chunk of receipt and sent to one person, landing just above them.
+      const y = 88 + (74 + i * 18 - 4 - 88) * 0.6 - 26;
+      return `
+      <g class="sb-send" style="--dx:${dx}px;--dy:${(168 - y).toFixed(1)}px;--i:${i}">
+        <rect x="125" y="${(y - 7).toFixed(1)}" width="50" height="14" rx="3"/>
+        <path d="M131 ${y.toFixed(1)}h20M159 ${y.toFixed(1)}h10"/>
+      </g>`;
+    }).join("")}
     ${[["a", 70, "$12.40"], ["b", 150, "$18.20"], ["c", 230, "$9.10"]].map(([k, x, amount], i) => `
       <g class="sb-av sb-${k}" style="--i:${i}"><circle class="sb-ring" cx="${x}" cy="206" r="20"/><circle class="sb-head" cx="${x}" cy="200" r="5.5"/><path class="sb-body" d="M${x - 9.5} 217c0-5.5 4.2-8.5 9.5-8.5s9.5 3 9.5 8.5"/></g>
       <text class="sb-amt" style="--i:${i}" x="${x}" y="246">${amount}</text>
@@ -170,7 +179,7 @@ const SPLIT_ANIMATION = `
 function renderCreate() {
   app.innerHTML = `
     <form class="stack" id="create">
-      <p class="tagline">Scan, split and get paid back with PayPal.</p>
+      <p class="tagline">Scan and share your bill in one click</p>
       <div class="scan-card" id="scan-card">
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">
