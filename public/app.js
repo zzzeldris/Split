@@ -7,6 +7,7 @@ const app = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const params = new URLSearchParams(location.search);
 const BILL_ID = params.get("b");
+const SHOW_LOGIN = params.has("login");
 const POLL_MS = 2500;
 
 let config;
@@ -14,6 +15,7 @@ let bill = null; // the server's view of the bill
 let me = null; // { personId, token } for this device
 let adminToken = null;
 let myClaims = {}; // this device's claims; the source of truth while editing
+let zeroed = {}; // items this device explicitly set to 0%, so the 0% chip can show as chosen (the server stores no 0 claims)
 let draft = null; // the payer's editable receipt while reviewing
 let renderPending = false;
 let pointerDown = false; // a tap is in progress: re-rendering now would swallow its click
@@ -43,6 +45,23 @@ function toast(text, kind = "info") {
   toastTimer = setTimeout(() => (toastEl.hidden = true), 4000);
 }
 
+// The original receipt photo in a popup (phones, and the claim screen). The review screen on a wide desktop
+// shows it in a side panel instead (.photo-panel in style.css).
+function openPhoto() {
+  let dialog = document.getElementById("photo-dialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "photo-dialog";
+    dialog.setAttribute("aria-label", "Original receipt");
+    dialog.innerHTML = `<button type="button" class="icon-only close" aria-label="Close">${CLOSE_ICON}</button><div class="photo-scroll"><img alt="Original receipt photo"></div>`;
+    dialog.addEventListener("click", (e) => { if (e.target === dialog || e.target.closest(".close")) dialog.close(); });
+    document.body.append(dialog);
+  }
+  dialog.querySelector("img").src = `/api/bills/${BILL_ID}/photo`;
+  dialog.showModal();
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-photo]")) openPhoto(); });
+
 async function api(method, path, body, token) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -71,6 +90,8 @@ function forgetMe() {
   me = null;
   myClaims = {};
   storage.del(`person:${BILL_ID}`);
+  zeroed = {};
+  storage.del(`zero:${BILL_ID}`);
 }
 
 let pollTimer;
@@ -104,7 +125,7 @@ function render() {
     return;
   }
   renderPending = false;
-  if (!BILL_ID) return renderCreate();
+  if (!BILL_ID) return SHOW_LOGIN ? renderLogin() : renderCreate();
   if (!bill) return renderMissing();
   if (bill.status === "draft") return bill.isAdmin ? renderReview() : renderWaiting();
   if (bill.status === "open") return me ? renderClaims() : renderPickName();
@@ -133,29 +154,43 @@ function rememberBill(id, info) {
 
 const STATUS_LABEL = { draft: "checking receipt", open: "claiming", locked: "collecting", settled: "settled" };
 
+const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
+const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+// Decorative loop that fills the empty scan card: a receipt is scanned, splits into coins and each coin
+// flies to a friend with their share. Pure SVG + CSS (see .split-anim in style.css).
+const SPLIT_ANIMATION = `
+  <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
+    <g class="sa-receipt">
+      <path d="M100 30h100v120l-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8z"/>
+      <path class="sa-lines" d="M114 52h44M114 70h72M114 88h58M114 106h72M114 124h36"/>
+    </g>
+    <rect class="sa-scan" x="94" y="30" width="112" height="4" rx="2"/>
+    ${[["a", -78], ["b", 0], ["c", 78]].map(([k, dx]) => `
+      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:148px"><circle cx="150" cy="78" r="14"/><text x="150" y="83.5">$</text></g>`).join("")}
+    ${[["a", 72, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 228, "C", "$9.10"]].map(([k, x, who, amount]) => `
+      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="226" r="24"/><text x="${x}" y="232">${who}</text></g>
+      <text class="sa-amount sa-${k}" x="${x}" y="270">${amount}</text>`).join("")}
+  </svg>`;
+
 function renderCreate() {
   const p = profile();
   const known = Boolean(p.name && p.email);
   const recent = recentBills();
   const savedCode = storage.get("passcode") ?? "";
   app.innerHTML = `
-    <header class="app-bar"><img src="/icon.svg" alt="" width="32" height="32"><h1>Split the bill</h1></header>
     ${installBanner()}
     <form class="stack" id="create" novalidate>
-      ${recent.length ? "" : heroArt()}
-      <section class="card stack">
-        <label class="camera-btn">
-          <input type="file" name="photo" accept="image/*" capture="environment" hidden>
-          <span class="camera-icon" aria-hidden="true">📷</span>
-          <span>Take a photo of the receipt</span>
-        </label>
-        <label class="center small library-link">
-          <input type="file" name="library" accept="image/*" hidden>
-          or choose one from your photos
-        </label>
-        <div id="preview" class="center" hidden></div>
-      </section>
-      <section class="card stack">
+      <div class="scan-card" id="scan-card">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <div class="scan-hint" id="scan-hint">
+          ${SPLIT_ANIMATION}
+        </div>
+      </div>
+      <label class="scan-action">
+        <span class="scan-btn">${CAMERA_ICON}<input class="visually-hidden" name="photo" type="file" accept="image/*"></span>
+        <span id="scan-label">Scan receipt</span>
+      </label>
+      <section class="card stack" id="details" hidden>
         ${known ? `
           <div class="row" id="known-details">
             <div><div class="small muted">Friends pay you back at</div><strong>${esc(p.name)}</strong> <span class="small muted">${esc(p.email)}</span></div>
@@ -163,13 +198,13 @@ function renderCreate() {
           </div>` : ""}
         <div class="stack" id="detail-fields" ${known ? "hidden" : ""}>
           <label>Your name<input name="name" required maxlength="30" autocomplete="given-name" value="${esc(p.name ?? "")}"></label>
-          <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email" value="${esc(p.email ?? "")}"></label>
+          <label>Your PayPal email<input name="email" type="email" required autocomplete="email" value="${esc(p.email ?? "")}"></label>
         </div>
         ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off" value="${esc(savedCode)}"></label>` : ""}
+        <p class="small muted">Demo: no receipts with personal or card details.</p>
+        <button class="primary" type="submit">Read receipt</button>
+        <p class="error-text small" id="create-error" role="alert"></p>
       </section>
-      <p class="small muted center">Sandbox demo: please don't use receipts with personal or card details.</p>
-      <p class="error-text small center" id="create-error" role="alert"></p>
-      <div class="action-bar" id="read-bar" hidden><div><button class="primary wide" type="submit">Read receipt</button></div></div>
     </form>
     ${recent.length ? `
       <section class="card stack">
@@ -181,6 +216,7 @@ function renderCreate() {
 
   const form = document.getElementById("create");
   const errorEl = document.getElementById("create-error");
+  const details = document.getElementById("details");
   let photo = null;
 
   bindInstallBanner();
@@ -200,20 +236,29 @@ function renderCreate() {
     return ok;
   };
 
-  for (const input of [form.elements.photo, form.elements.library]) {
-    input.addEventListener("change", () => {
-      photo = input.files[0];
-      if (!photo) return;
-      const preview = document.getElementById("preview");
-      preview.hidden = false;
-      preview.innerHTML = `<img class="thumb" alt="Your receipt photo" src="${URL.createObjectURL(photo)}">`;
-      document.getElementById("read-bar").hidden = false;
-      errorEl.textContent = "";
-      // Name and email already known: go straight to reading the receipt.
-      if (detailsValid()) form.requestSubmit();
-      else form.querySelector("input:invalid:not([type=file])")?.focus();
-    });
-  }
+  // Show the chosen photo inside the frame so you can see what will be read. If the payer's details
+  // are remembered, start reading straight away; otherwise ask for them. Removing the photo hides them.
+  form.elements.photo.addEventListener("change", (event) => {
+    const card = document.getElementById("scan-card");
+    card.querySelector("img")?.remove();
+    photo = event.target.files[0] ?? null;
+    details.hidden = !photo;
+    document.getElementById("scan-hint").hidden = !!photo; // stops the animation behind the photo
+    errorEl.textContent = "";
+    if (!photo) {
+      document.getElementById("scan-label").textContent = "Scan receipt";
+      return;
+    }
+    const img = document.createElement("img");
+    img.alt = "Your receipt photo";
+    img.src = URL.createObjectURL(photo);
+    card.prepend(img);
+    document.getElementById("scan-label").textContent = "Retake photo";
+    if (detailsValid()) return form.requestSubmit();
+    const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    details.scrollIntoView({ block: "nearest", behavior: calm ? "auto" : "smooth" });
+    form.querySelector("input:invalid:not([type=file])")?.focus({ preventScroll: true });
+  });
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -275,48 +320,6 @@ function showBusy(photo) {
   };
 }
 
-// First-visit picture of what the app does: a receipt prints, then tears into one strip per friend.
-function heroArt() {
-  const TOP = 16, BOTTOM = 122, CUTS = [107, 133];
-  // A jagged vertical tear at x, from the top of the receipt to the bottom.
-  const tear = (x) => {
-    const pts = [];
-    for (let y = TOP, k = 0; y <= BOTTOM; y += 6, k++) pts.push(`${x + (k % 2 ? 2.5 : -2.5)},${y}`);
-    return pts;
-  };
-  const edges = [[`78,${TOP}`, `78,${BOTTOM}`], tear(CUTS[0]), tear(CUTS[1]), [`162,${TOP}`, `162,${BOTTOM}`]];
-  const strip = (n) => [...edges[n], ...[...edges[n + 1]].reverse()].join(" ");
-  const rows = [30, 42, 54, 66, 78].map((y, i) =>
-    `<rect class="ink" x="88" y="${y}" width="${[38, 30, 44, 26, 34][i]}" height="4" rx="2"/><rect class="ink" x="140" y="${y}" width="12" height="4" rx="2"/>`).join("");
-  // Drawn once per strip (not with <use>), so the page styles reach it.
-  const paper = `
-            <rect class="paper" x="78" y="${TOP - 4}" width="84" height="${BOTTOM - TOP + 4}"/>
-            ${rows}
-            <rect class="ink" x="88" y="96" width="64" height="1.5"/>
-            <rect class="ink strong" x="88" y="104" width="24" height="6" rx="2"/><rect class="ink strong" x="134" y="104" width="18" height="6" rx="2"/>`;
-  const people = [["A", 76], ["B", 120], ["C", 164]]; // under each strip once it has drifted apart
-  return `
-    <figure class="hero" aria-hidden="true">
-      <svg viewBox="0 0 240 160" width="240" height="160">
-        <defs>
-          <clipPath id="below-slot"><rect x="0" y="${TOP}" width="240" height="160"/></clipPath>
-          ${[0, 1, 2].map((n) => `<clipPath id="strip${n}"><polygon points="${strip(n)}"/></clipPath>`).join("")}
-        </defs>
-        <rect class="slot" x="62" y="10" width="116" height="7" rx="3.5"/>
-        <g clip-path="url(#below-slot)"><g class="print">
-          ${[0, 1, 2].map((n) => `
-            <g class="strip strip${n}"><g clip-path="url(#strip${n})">
-              ${paper}
-              <rect class="tint" x="70" y="${TOP - 4}" width="100" height="${BOTTOM - TOP + 4}"/>
-            </g></g>`).join("")}
-        </g></g>
-        ${people.map(([name, x], n) => `
-          <g class="person person${n}"><circle cx="${x}" cy="142" r="9"/><text x="${x}" y="146">${name}</text></g>`).join("")}
-      </svg>
-      <figcaption class="small muted">Snap the receipt. Everyone pays their part.</figcaption>
-    </figure>`;
-}
-
 // ---------- Installing to the home screen ----------
 
 let installPrompt = null; // Android/Chrome: the browser's own install dialog, saved for our button
@@ -375,6 +378,24 @@ async function resizeImage(file) {
   return { mimeType: "image/jpeg", data: dataUrl.slice(dataUrl.indexOf(",") + 1) };
 }
 
+// ---------- Log in (placeholder) ----------
+// Planned: "Log in with PayPal" (OAuth) so the payer doesn't re-enter their name and email.
+// Not wired up yet, so the button only says so.
+
+function renderLogin() {
+  app.innerHTML = `
+    <a class="icon-btn left" href="/" aria-label="Back to scan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </a>
+    <section class="card stack" style="gap:20px">
+      <div class="stack">
+        <h1>Log in</h1>
+      </div>
+      <button class="primary" id="paypal-login">Continue with PayPal</button>
+    </section>`;
+  document.getElementById("paypal-login").addEventListener("click", () => toast("PayPal login isn't connected yet."));
+}
+
 // ---------- Review (payer, draft) ----------
 
 function draftTotals() {
@@ -400,18 +421,26 @@ function renderReview() {
     ${topBar()}
     <header class="stack">
       <h1>Check the receipt</h1>
-      <p class="muted">AI read this from your photo. Fix anything it got wrong before your friends claim items.</p>
+      ${bill.hasPhoto ? `<button type="button" class="link small photo-link" data-photo style="justify-self:start">View receipt photo</button>` : ""}
     </header>
+    ${bill.hasPhoto ? `<aside class="photo-panel" aria-label="Original receipt"><img src="/api/bills/${BILL_ID}/photo" alt="Original receipt photo"></aside>` : ""}
+    ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
-      <div class="edit-row small muted"><span>Item</span><span>Qty</span><span>Price</span><span></span></div>
-      ${draft.items.map((item, i) => `
-        <div class="edit-row">
-          <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80">
-          <input aria-label="Quantity" data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal">
-          <input aria-label="Price" class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal">
-          <button aria-label="Remove ${esc(item.name)}" data-remove="${i}">✕</button>
-        </div>`).join("")}
+      <h2 class="section-title">Items</h2>
+      <div class="edit-list">
+        ${draft.items.map((item, i) => `
+          <div class="edit-item">
+            <div class="edit-top">
+              <input aria-label="Item name" data-item="${i}" data-key="name" value="${esc(item.name)}" maxlength="80" placeholder="Item name">
+              <button class="icon-only" aria-label="Remove ${esc(item.name) || "item"}" data-remove="${i}">${CLOSE_ICON}</button>
+            </div>
+            <div class="edit-bottom">
+              <label class="mini">Qty<input data-item="${i}" data-key="quantity" value="${item.quantity}" inputmode="decimal"></label>
+              <label class="mini">Price<input class="num" data-item="${i}" data-key="price" value="${dollarsText(item.priceCents)}" inputmode="decimal"></label>
+            </div>
+          </div>`).join("")}
+      </div>
       <button id="add-item">+ Add item</button>
     </section>
     <section class="card stack">
@@ -419,20 +448,16 @@ function renderReview() {
       <div class="money-row"><label for="discount">Discount</label><input id="discount" class="num" data-money="discountCents" value="${dollarsText(draft.discountCents)}" inputmode="decimal"></div>
       <div class="money-row"><span>Subtotal</span><span class="num">${money(t.subtotal)}</span></div>
       <div class="money-row"><label for="tax">Tax</label><input id="tax" class="num" data-money="taxCents" value="${dollarsText(draft.taxCents)}" inputmode="decimal"></div>
-      <div class="stack">
-        <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
-        <div class="chips" role="group" aria-label="Tip percentage">
-          ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
-          <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
-        </div>
+      <div class="money-row"><label for="tip">Tip${printed.tipCents ? " (from receipt)" : ""}</label><input id="tip" class="num" data-money="tipCents" value="${dollarsText(draft.tipCents)}" inputmode="decimal"></div>
+      <div class="chips" role="group" aria-label="Tip percentage">
+        ${tipPcts.map((p) => `<button data-tip="${p}" aria-pressed="${draft.tipCents === Math.round(t.subtotal * p / 100)}">${p}%</button>`).join("")}
+        <button data-tip="0" aria-pressed="${draft.tipCents === 0}">None</button>
       </div>
-      <div class="money-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
-      ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("") || `<p class="notice ok">Matches the receipt.</p>`}
+      <div class="money-row total-row"><strong>Total</strong><strong class="num">${money(t.total)}</strong></div>
     </section>
-    <button class="link small" id="photo">View receipt photo</button>
-    <div class="action-bar"><div class="stack">
-      <p class="error-text small center" id="review-error" role="alert"></p>
-      <button class="primary wide" id="open">Looks right: invite friends</button>
+    <div class="footer"><div class="stack">
+      <p class="error-text small" id="review-error" role="alert"></p>
+      <button class="primary" id="open">Confirm</button>
     </div></div>`;
 
   // Typing updates the draft without re-rendering (so the field keeps focus); leaving it re-renders totals.
@@ -460,7 +485,6 @@ function renderReview() {
     draft.tipCents = Math.round(draftTotals().subtotal * Number(b.dataset.tip) / 100);
     renderReview();
   }));
-  document.getElementById("photo").addEventListener("click", () => window.open(`/api/bills/${BILL_ID}/photo`, "_blank"));
   document.getElementById("open").addEventListener("click", async (e) => {
     e.target.disabled = true;
     const errorEl = document.getElementById("review-error");
@@ -482,7 +506,7 @@ function renderWaiting() {
   app.innerHTML = `${topBar()}
     <section class="card stack">
       <h1>Almost ready</h1>
-      <p class="muted">${esc(bill.payer.name)} is checking the receipt. This page updates by itself.</p>
+      <p class="muted">${esc(bill.payer.name)} is checking the receipt.</p>
     </section>`;
 }
 
@@ -490,7 +514,6 @@ function renderMissing() {
   app.innerHTML = `${topBar()}
     <section class="card stack">
       <h1>Bill not found</h1>
-      <p class="muted">This bill has expired or doesn't exist.</p>
       <a href="/">Start a new bill</a>
     </section>`;
 }
@@ -542,7 +565,7 @@ function billHeader() {
     <header class="stack">
       <h1>${esc(r.merchant || "The bill")}</h1>
       <p class="muted">${money(r.totalCents)} total · paid by ${esc(bill.payer.name)}
-        ${bill.hasPhoto ? ` · <a href="/api/bills/${BILL_ID}/photo" target="_blank" rel="noopener">receipt photo</a>` : ""}</p>
+        ${bill.hasPhoto ? ` · <button type="button" class="link" data-photo>receipt photo</button>` : ""}</p>
     </header>`;
 }
 
@@ -572,7 +595,6 @@ function renderClaims() {
   app.innerHTML = `
     ${billHeader()}
     ${bill.isAdmin ? adminPanel(unclaimed) : ""}
-    <p class="muted small">Tap how much of each item you had. If the shares on an item don't add up to 100%, it's split in proportion: 50% and 10% becomes 5 to 1.</p>
     ${bill.receipt.items.map((item) => {
       const mine = myClaims[item.id] ?? 0;
       const rows = itemClaims(item.id, bill.people, claims);
@@ -584,22 +606,20 @@ function renderClaims() {
         <section class="card item ${rows.length === 0 && item.priceCents > 0 ? "unclaimed" : ""}">
           <div class="row"><strong>${esc(item.name)}${item.quantity !== 1 ? ` <span class="muted">× ${item.quantity}</span>` : ""}</strong><span class="num">${money(item.priceCents)}</span></div>
           <div class="chips" role="group" aria-label="Your share of ${esc(item.name)}">
-            ${chips.map((c) => `<button data-claim="${item.id}" data-pct="${c}" aria-pressed="${c > 0 && mine === c}">${c}%</button>`).join("")}
+            ${chips.map((c) => `<button data-claim="${item.id}" data-pct="${c}" aria-pressed="${c === 0 ? mine === 0 && zeroed[item.id] === true : mine === c}">${c}%</button>`).join("")}
             <input aria-label="Custom percent for ${esc(item.name)}" data-custom="${item.id}" inputmode="numeric" placeholder="%" value="${chips.includes(mine) ? "" : mine}">
           </div>
-          <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · claimed ${sum}% in total, split in proportion` : ""}</p>
+          <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · split in proportion` : ""}</p>
         </section>`;
     }).join("")}
-    <div class="action-bar"><div class="row">
-      <div><div class="small muted">${isPayer() ? "Your part (you already paid)" : `You owe ${esc(bill.payer.name)}`}</div><div class="big num">≈ ${money(myEstimate())}</div></div>
-      ${bill.isAdmin
-        ? `<button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>${unclaimed.length ? `${unclaimed.length} unclaimed` : "Lock &amp; collect"}</button>`
-        : `<p class="small muted right">${unclaimed.length ? `${unclaimed.length} item${unclaimed.length > 1 ? "s" : ""} unclaimed` : "Everything's claimed"}<br>Waiting for ${esc(bill.payer.name)} to lock</p>`}
+    <div class="footer"><div class="row">
+      <div><div class="small muted">${isPayer() ? "Your part" : `You owe ${esc(bill.payer.name)}`}</div><div class="big num">≈ ${money(myEstimate())}</div></div>
+      <p class="small muted" style="text-align:right">${unclaimed.length ? `${unclaimed.length} unclaimed` : isPayer() ? "" : `Waiting for ${esc(bill.payer.name)}`}</p>
     </div></div>`;
 
   app.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => {
     tapFeedback();
-    setMyClaim(b.dataset.claim, Number(b.dataset.pct));
+    setMyClaim(b.dataset.claim, Number(b.dataset.pct), b.dataset.pct === "0");
     render();
   }));
   app.querySelectorAll("[data-custom]").forEach((input) => input.addEventListener("input", () => {
@@ -611,9 +631,12 @@ function renderClaims() {
 }
 
 let saveTimer;
-function setMyClaim(itemId, pct) {
+function setMyClaim(itemId, pct, explicitZero = false) {
   if (pct > 0) myClaims[itemId] = pct;
   else delete myClaims[itemId];
+  if (explicitZero) zeroed[itemId] = true;
+  else delete zeroed[itemId];
+  storage.set(`zero:${BILL_ID}`, zeroed);
   clearTimeout(saveTimer);
   saveTimer = setTimeout(saveClaims, 400);
 }
@@ -646,7 +669,8 @@ function adminPanel(unclaimed = []) {
           <li><span>${esc(p.name)}${p.id === bill.payer.id ? " <span class='muted small'>(you)</span>" : ""}</span>
           ${p.id !== bill.payer.id && p.taken ? `<button class="link small" data-reset="${p.id}">Reset name</button>` : ""}</li>`).join("")}
       </ul>
-      ${bill.status === "open" && unclaimed.length ? `<p class="small muted">Still unclaimed: ${unclaimed.map((i) => esc(i.name)).join(", ")}</p>` : ""}
+      ${bill.status === "open" ? `
+        <button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>Lock &amp; request payment</button>` : ""}
       ${bill.unlockable ? `<button id="unlock">Unlock to change claims</button>` : ""}
     </section>`;
 }
@@ -724,7 +748,7 @@ function myItemsList() {
   if (rows.length === 0) return "";
   return `<ul class="people small muted">${rows.map(({ item, row }) =>
     `<li><span>${esc(item.name)}${row.fraction < 1 ? ` (${Math.round(row.fraction * 100)}%)` : ""}</span><span class="num">${money(Math.round(item.priceCents * row.fraction))}</span></li>`).join("")}
-    <li><span>+ your part of tax${bill.receipt.tipCents ? " and tip" : ""}${bill.receipt.discountCents ? ", minus discount" : ""}</span><span></span></li></ul>`;
+    <li><span>+ tax${bill.receipt.tipCents ? " & tip" : ""}${bill.receipt.discountCents ? ", − discount" : ""}</span><span></span></li></ul>`;
 }
 
 function renderPayment() {
@@ -735,9 +759,9 @@ function renderPayment() {
 
   let mine = "";
   if (owes && myStatus === "paid") {
-    mine = `<p class="notice ok">You paid ${money(myCents)}. Thanks!</p>`;
+    mine = `<p class="notice ok">You paid ${money(myCents)}</p>`;
   } else if (owes && myStatus === "pending") {
-    mine = `<p class="notice warn">Your payment of ${money(myCents)} is pending review at PayPal.</p>`;
+    mine = `<p class="notice warn">Your ${money(myCents)} payment is pending</p>`;
   } else if (owes) {
     mine = `
       <div class="small muted">You owe ${esc(bill.payer.name)}</div>
@@ -745,7 +769,7 @@ function renderPayment() {
       ${myItemsList()}
       <div id="paypal-slot"><p class="muted small">Loading PayPal…</p></div>`;
   } else if (me && !isPayer()) {
-    mine = `<p class="notice ok">You don't owe anything on this bill.</p>`;
+    mine = `<p class="notice ok">You owe nothing.</p>`;
   }
 
   app.innerHTML = `
@@ -753,7 +777,7 @@ function renderPayment() {
     ${mine ? `<section class="card stack">${mine}</section>` : ""}
     ${bill.isAdmin && bill.status === "locked" ? adminPanel() : ""}
     ${statusBoard()}
-    ${bill.status === "settled" && bill.isAdmin ? `<a href="/">Split another bill</a>` : ""}`;
+    ${bill.status === "settled" && bill.isAdmin ? `<a class="btn" href="/">Back to home</a>` : ""}`;
 
   bindAdminPanel();
   if (owes && myStatus === "unpaid") mountPayPalButton(myCents);
@@ -826,7 +850,7 @@ async function onApprove({ orderId }) {
   if (data.error === "INSTRUMENT_DECLINED") {
     toast("Your payment method was declined. Try again with a different one.", "error");
   } else if (ok && data.status === "PENDING") {
-    toast(`Payment received and pending review. Reference: ${data.captureId}`);
+    toast("Payment pending review");
   } else if (!ok || data.status !== "COMPLETED") {
     toast(data.error ?? "Something went wrong capturing the payment. You have not been charged.", "error");
   } else {
@@ -855,6 +879,7 @@ async function init() {
   }
   adminToken = storage.get(`admin:${BILL_ID}`);
   me = storage.get(`person:${BILL_ID}`);
+  zeroed = storage.get(`zero:${BILL_ID}`) ?? {};
 
   try {
     await refresh();
