@@ -628,7 +628,7 @@ function renderPayment() {
     ${mine ? `<section class="card stack">${mine}</section>` : ""}
     ${bill.isAdmin && bill.status === "locked" ? adminPanel() : ""}
     ${statusBoard()}
-    ${bill.status === "settled" && bill.isAdmin ? `<a href="/">Back to home</a>` : ""}`;
+    ${bill.status === "settled" && bill.isAdmin ? `<a class="btn" href="/">Back to home</a>` : ""}`;
 
   bindAdminPanel();
   if (owes && myStatus === "unpaid") mountPayPalButton(myCents);

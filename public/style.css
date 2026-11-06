@@ -141,6 +141,19 @@ button {
   border-radius: 999px;
   cursor: pointer;
 }
+a.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 18px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  text-decoration: none;
+}
 button.primary { min-height: 52px; background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.link { min-height: 0; padding: 0; border: 0; background: none; color: var(--accent); text-decoration: underline; }
@@ -269,10 +282,10 @@ paypal-button { display: block; width: 100%; }
 
 /* Press feedback: 0.96 over 150ms, never on a disabled button. These buttons draw their own pressed
    state, so the default tap flash is switched off. */
-button, .scan-btn { -webkit-tap-highlight-color: transparent; }
+button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: no-preference) {
-  button, .scan-btn { transition-property: scale; transition-duration: 150ms; transition-timing-function: ease-out; }
-  button:not(:disabled):active, .scan-btn:active { scale: 0.96; }
+  button, .scan-btn, a.btn { transition-property: scale; transition-duration: 150ms; transition-timing-function: ease-out; }
+  button:not(:disabled):active, .scan-btn:active, a.btn:active { scale: 0.96; }
   button.link:active { scale: 1; }
 }
 
