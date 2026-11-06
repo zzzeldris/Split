@@ -45,6 +45,23 @@ function toast(text, kind = "info") {
   toastTimer = setTimeout(() => (toastEl.hidden = true), 4000);
 }
 
+// The original receipt photo in a popup (phones, and the claim screen). The review screen on a wide desktop
+// shows it in a side panel instead (.photo-panel in style.css).
+function openPhoto() {
+  let dialog = document.getElementById("photo-dialog");
+  if (!dialog) {
+    dialog = document.createElement("dialog");
+    dialog.id = "photo-dialog";
+    dialog.setAttribute("aria-label", "Original receipt");
+    dialog.innerHTML = `<button type="button" class="icon-only close" aria-label="Close">${CLOSE_ICON}</button><div class="photo-scroll"><img alt="Original receipt photo"></div>`;
+    dialog.addEventListener("click", (e) => { if (e.target === dialog || e.target.closest(".close")) dialog.close(); });
+    document.body.append(dialog);
+  }
+  dialog.querySelector("img").src = `/api/bills/${BILL_ID}/photo`;
+  dialog.showModal();
+}
+document.addEventListener("click", (e) => { if (e.target.closest("[data-photo]")) openPhoto(); });
+
 async function api(method, path, body, token) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -279,8 +296,9 @@ function renderReview() {
   app.innerHTML = `
     <header class="stack">
       <h1>Check the receipt</h1>
-      <button class="link small" id="photo" style="justify-self:start">View receipt photo</button>
+      ${bill.hasPhoto ? `<button type="button" class="link small photo-link" data-photo style="justify-self:start">View receipt photo</button>` : ""}
     </header>
+    ${bill.hasPhoto ? `<aside class="photo-panel" aria-label="Original receipt"><img src="/api/bills/${BILL_ID}/photo" alt="Original receipt photo"></aside>` : ""}
     ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
@@ -314,7 +332,7 @@ function renderReview() {
     </section>
     <div class="footer"><div class="stack">
       <p class="error-text small" id="review-error"></p>
-      <button class="primary" id="open">Looks right: let friends claim items</button>
+      <button class="primary" id="open">Confirm</button>
     </div></div>`;
 
   // Typing updates the draft without re-rendering (so the field keeps focus); leaving it re-renders totals.
@@ -342,7 +360,6 @@ function renderReview() {
     draft.tipCents = Math.round(draftTotals().subtotal * Number(b.dataset.tip) / 100);
     renderReview();
   }));
-  document.getElementById("photo").addEventListener("click", () => window.open(`/api/bills/${BILL_ID}/photo`, "_blank"));
   document.getElementById("open").addEventListener("click", async (e) => {
     e.target.disabled = true;
     const errorEl = document.getElementById("review-error");
@@ -417,7 +434,7 @@ function billHeader() {
     <header class="stack">
       <h1>${esc(r.merchant || "The bill")}</h1>
       <p class="muted">${money(r.totalCents)} total · paid by ${esc(bill.payer.name)}
-        ${bill.hasPhoto ? ` · <a href="/api/bills/${BILL_ID}/photo" target="_blank" rel="noopener">receipt photo</a>` : ""}</p>
+        ${bill.hasPhoto ? ` · <button type="button" class="link" data-photo>receipt photo</button>` : ""}</p>
     </header>`;
 }
 
@@ -611,7 +628,7 @@ function renderPayment() {
     ${mine ? `<section class="card stack">${mine}</section>` : ""}
     ${bill.isAdmin && bill.status === "locked" ? adminPanel() : ""}
     ${statusBoard()}
-    ${bill.status === "settled" && bill.isAdmin ? `<a href="/">Split another bill</a>` : ""}`;
+    ${bill.status === "settled" && bill.isAdmin ? `<a href="/">Back to home</a>` : ""}`;
 
   bindAdminPanel();
   if (owes && myStatus === "unpaid") mountPayPalButton(myCents);

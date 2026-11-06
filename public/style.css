@@ -338,3 +338,45 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
   .wordmark:hover .logo-top { transform: translateX(0.01em); }
   .wordmark:hover .logo-bottom { transform: translateX(-0.01em); }
 }
+
+/* Original receipt photo. Phones and the claim screen: a popup (<dialog>). Wide desktop screens: on the review
+   screen it sits in the blank space beside the column instead, so you can check it while editing. */
+.photo-panel { display: none; }
+@media (min-width: 1200px) and (hover: hover) and (pointer: fine) {
+  .photo-panel {
+    display: block;
+    position: fixed;
+    top: 104px;
+    left: calc(50% + 304px);
+    width: min(340px, calc(50vw - 328px));
+    max-height: calc(100vh - 220px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 8px; /* 12px image radius + 8px padding */
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+  }
+  .photo-panel img { display: block; width: 100%; height: auto; border-radius: 12px; }
+  .photo-link { display: none; }
+}
+#photo-dialog {
+  width: min(92vw, 560px);
+  padding: 0;
+  overflow: hidden;
+  color: var(--text);
+  background: var(--card);
+  border: 0;
+  border-radius: 20px;
+}
+#photo-dialog::backdrop { background: rgb(1 33 105 / 0.5); }
+.photo-scroll { max-height: 90vh; overflow: auto; overscroll-behavior: contain; }
+#photo-dialog img { display: block; width: 100%; height: auto; }
+#photo-dialog .close { position: absolute; top: 8px; right: 8px; z-index: 1; }
+.photo-panel img, #photo-dialog img { outline: 1px solid oklch(0 0 0 / 0.1); outline-offset: -1px; }
+:root[data-theme="dark"] .photo-panel img, :root[data-theme="dark"] #photo-dialog img { outline-color: oklch(1 0 0 / 0.1); }
+@media (prefers-reduced-motion: no-preference) {
+  #photo-dialog[open] { opacity: 1; scale: 1; transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1), scale 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+  @starting-style { #photo-dialog[open] { opacity: 0; scale: 0.96; } }
+}
