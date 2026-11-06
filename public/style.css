@@ -289,8 +289,8 @@ button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
   button.link:active { scale: 1; }
 }
 
-/* Empty scan card: a 12s story, 3s per scene (no captions). 1 scan the receipt (0-25%), 2 highlight its lines (25-50%),
-   3 transcribe them into a table (50-75%), 4 split into coins that reach friends, who show their share and
+/* Empty scan card: a 12s story, 3s per scene (no captions). 1 scan the receipt (0-25%), 2 highlight its item lines (25-50%),
+   3 trim the receipt to just those lines, zoom in and write them out (50-75%), 4 split into coins that reach friends, who show their share and
    a check mark once collected (75-100%). The base styles below are the last frame, which is what people with
    reduced motion see. */
 .split-anim { display: block; width: 100%; height: 100%; }
@@ -301,10 +301,9 @@ button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
 .sb-receipt .sb-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
 .sb-hl { fill: var(--accent); fill-opacity: 0.25; transform-box: fill-box; transform-origin: left center; }
 .sb-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
-.sb-table { transform-box: view-box; transform-origin: 150px 48px; }
-.sb-table-bg { fill: var(--card); stroke: var(--text); stroke-width: 3; }
-.sb-table-head { fill: var(--accent-soft); }
-.sb-table text { font-size: 12px; font-weight: 600; }
+.sb-zoom { transform-box: view-box; transform-origin: 150px 88px; }
+.sb-slice { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
+.sb-zoom text { font-size: 10px; font-weight: 600; }
 .sb-chip circle { fill: var(--c); }
 .sb-chip text { font-size: 12px; fill: #fff; }
 .sb-ring { fill: var(--accent-soft); stroke: var(--c); stroke-width: 3.5; }
@@ -317,29 +316,31 @@ button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
 .sb-av, .sb-chip, .sb-chk, .sb-receipt { transform-box: fill-box; transform-origin: center; }
 /* last frame (also the reduced-motion frame) */
 .sb-receipt, .sb-hl, .sb-scan, .sb-chip { opacity: 0; }
-.sb-table { transform: scale(0.6); }
+.sb-zoom { transform: translateY(-26px) scale(0.6); }
 
 @media (prefers-reduced-motion: no-preference) {
   .sb-receipt { animation: sb-receipt 12s ease-out infinite both; }
   .sb-scan { animation: sb-scan 12s ease-in-out infinite both; }
   .sb-hl { animation: sb-hl 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.15s); }
-  .sb-table { animation: sb-table 12s cubic-bezier(0.77, 0, 0.175, 1) infinite both; }
+  .sb-zoom { animation: sb-zoom 12s cubic-bezier(0.77, 0, 0.175, 1) infinite both; }
+  .sb-slice { animation: sb-slice 12s ease-out infinite both; }
   .sb-row { animation: sb-row 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.15s); }
   .sb-av { animation: sb-av 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
   .sb-chip { animation: sb-fly 12s ease-in-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
   .sb-amt { animation: sb-amt 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
   .sb-chk { animation: sb-chk 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
 }
-@keyframes sb-receipt { 0% { opacity: 0; transform: translateY(12px); } 4% { opacity: 1; transform: translateY(0); } 48% { opacity: 1; transform: scale(1); } 54%, 100% { opacity: 0; transform: scale(0.94); } }
+@keyframes sb-receipt { 0% { opacity: 0; transform: translateY(12px); } 4% { opacity: 1; transform: translateY(0); } 48% { opacity: 1; transform: translateY(0); } 56%, 100% { opacity: 0; transform: translateY(0); } }
 @keyframes sb-scan { 0%, 5% { opacity: 0; transform: translateY(0); } 7% { opacity: 1; } 19% { opacity: 1; transform: translateY(116px); } 22%, 100% { opacity: 0; transform: translateY(116px); } }
-@keyframes sb-hl { 0%, 26% { opacity: 1; transform: scaleX(0); } 31%, 48% { opacity: 1; transform: scaleX(1); } 52%, 100% { opacity: 0; transform: scaleX(1); } }
-@keyframes sb-table {
-  0%, 50% { opacity: 0; transform: translateY(12px) scale(1); }
-  54%, 74% { opacity: 1; transform: translateY(0) scale(1); }
-  80%, 96% { opacity: 1; transform: translateY(0) scale(0.6); }
-  99%, 100% { opacity: 0; transform: translateY(0) scale(0.6); }
+@keyframes sb-hl { 0%, 26% { opacity: 1; transform: scaleX(0); } 31%, 52% { opacity: 1; transform: scaleX(1); } 60%, 100% { opacity: 0; transform: scaleX(1); } }
+@keyframes sb-zoom {
+  0%, 52% { opacity: 1; transform: translateY(0) scale(1); }
+  60%, 74% { opacity: 1; transform: translateY(0) scale(1.3); }
+  80%, 96% { opacity: 1; transform: translateY(-26px) scale(0.6); }
+  99%, 100% { opacity: 0; transform: translateY(-26px) scale(0.6); }
 }
-@keyframes sb-row { 0%, 52% { opacity: 0; transform: translateY(6px); } 58%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sb-slice { 0%, 50% { opacity: 0; } 56%, 96% { opacity: 1; } 99%, 100% { opacity: 0; } }
+@keyframes sb-row { 0%, 54% { opacity: 0; transform: translateY(6px); } 60%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
 @keyframes sb-av { 0%, 75% { opacity: 0; transform: scale(0.9); } 79%, 96% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(1); } }
 @keyframes sb-fly {
   0%, 80% { opacity: 0; transform: translate(0, 0) scale(0.5); }
