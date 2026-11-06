@@ -16,6 +16,8 @@
   --warn-soft: #fff4d6;
   --error: #c62828;
   --shadow: 0 8px 28px rgba(1, 33, 105, 0.10);
+  --logo-top: #012169;
+  --logo-bottom: #0b5cd5;
 }
 
 :root[data-theme="dark"] {
@@ -35,6 +37,8 @@
   --warn-soft: #3a2f12;
   --error: #ff8a80;
   --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --logo-top: #ffffff;
+  --logo-bottom: #6fa8ff;
 }
 
 * { box-sizing: border-box; }
@@ -71,7 +75,14 @@ main { max-width: 560px; margin: 0 auto; padding: 24px 16px 0; display: grid; gr
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
-.wordmark { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: 0.04em; color: var(--text); text-decoration: none; }
+.wordmark { display: block; text-decoration: none; }
+
+/* SPLIT logo (from the logo artifact): two stacked copies of the word, clipped above and below a diagonal
+   gap. All offsets are in em, so it scales with font-size. */
+.logo { position: relative; display: inline-block; font-size: 2rem; font-weight: 800; letter-spacing: 0.06em; line-height: 1; }
+.logo-top, .logo-bottom { display: block; }
+.logo-top { color: var(--logo-top); clip-path: polygon(0 0, 100% 0, 100% 40%, 0 56%); transform: translateX(-0.02em); }
+.logo-bottom { position: absolute; left: 0; top: 0; color: var(--logo-bottom); clip-path: polygon(0 59%, 100% 43%, 100% 100%, 0 100%); transform: translateX(0.02em); }
 .icon-btn {
   position: absolute;
   top: 16px;
