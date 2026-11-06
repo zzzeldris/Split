@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- Source for the favicons in public/: the "S" from the SPLIT logo in its dark-background colours, cut by
+     the same diagonal clips. Regenerate from the project root (macOS). Headless Chrome won't open a window
+     narrower than about 500px, so the tile is drawn in the middle of a 500x500 page and the middle is cropped out:
+       C="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+       "$C" --headless=new --hide-scrollbars --default-background-color=00000000 --window-size=500,500 \
+         --virtual-time-budget=3000 --screenshot=/tmp/fav.png "file://$PWD/scripts/favicon.html?size=192"
+       sips --cropToHeightWidth 192 192 /tmp/fav.png --out public/favicon-192.png
+       "$C" --headless=new --hide-scrollbars --window-size=500,500 \
+         --virtual-time-budget=3000 --screenshot=/tmp/touch.png "file://$PWD/scripts/favicon.html?size=180&square"
+       sips --cropToHeightWidth 180 180 /tmp/touch.png --out public/apple-touch-icon.png
+       sips -z 32 32 public/favicon-192.png --out public/favicon-32.png
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@800&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; }
+  body { display: flex; align-items: center; justify-content: center; }
+  .tile { width: var(--size); height: var(--size); display: flex; align-items: center; justify-content: center; background: #012169; border-radius: 22%; }
+  .square .tile { border-radius: 0; } /* iOS rounds the home-screen icon itself */
+  .s { position: relative; font: 800 calc(var(--size) * 0.76)/1 "Inter", sans-serif; transform: translateY(-2%); }
+  .s span { display: block; }
+  .top { color: #ffffff; clip-path: polygon(0 0, 100% 0, 100% 40%, 0 56%); transform: translateX(-0.02em); }
+  .bottom { position: absolute; inset: 0; color: #6fa8ff; clip-path: polygon(0 59%, 100% 43%, 100% 100%, 0 100%); transform: translateX(0.02em); }
+</style>
+</head>
+<body>
+<div class="tile"><div class="s"><span class="top">S</span><span class="bottom">S</span></div></div>
+<script>
+  // ?size=192 sets the tile size in px; ?square drops the rounded corners.
+  const q = new URLSearchParams(location.search);
+  document.documentElement.style.setProperty("--size", (Number(q.get("size")) || 192) + "px");
+  if (q.has("square")) document.documentElement.classList.add("square");
+</script>
+</body>
+</html>

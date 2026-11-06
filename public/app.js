@@ -170,6 +170,7 @@ const SPLIT_ANIMATION = `
 function renderCreate() {
   app.innerHTML = `
     <form class="stack" id="create">
+      <p class="tagline">Scan, split and get paid back with PayPal.</p>
       <div class="scan-card" id="scan-card">
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">

@@ -3,7 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Split the Bill</title>
+  <title>Split</title>
+  <meta name="description" content="Snap the receipt, split it with friends, get paid back with PayPal.">
+  <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="icon" href="/favicon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <script>
     // Set the theme before first paint so there's no flash. Light is the default; the top-bar button switches.
     try { document.documentElement.dataset.theme = localStorage.getItem("theme") === "dark" ? "dark" : "light"; } catch { document.documentElement.dataset.theme = "light"; }
@@ -39,8 +43,11 @@
     label();
     toggle.addEventListener("click", () => {
       const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+      const root = document.documentElement;
       const apply = () => {
-        document.documentElement.dataset.theme = next;
+        root.classList.add("theming"); // no per-element colour transitions during the swap (see style.css)
+        root.dataset.theme = next;
+        requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove("theming")));
         try { localStorage.setItem("theme", next); } catch { /* private mode */ }
         label();
       };
