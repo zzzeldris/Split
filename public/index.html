@@ -37,9 +37,15 @@
     label();
     toggle.addEventListener("click", () => {
       const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-      document.documentElement.dataset.theme = next;
-      try { localStorage.setItem("theme", next); } catch { /* private mode */ }
-      label();
+      const apply = () => {
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem("theme", next); } catch { /* private mode */ }
+        label();
+      };
+      // One cross-fade of the whole page (see ::view-transition in style.css). Without it, every color
+      // would transition on its own clock and the switch would smear. Browsers without the API just swap.
+      if (document.startViewTransition) document.startViewTransition(apply);
+      else apply();
     });
   </script>
 </body>

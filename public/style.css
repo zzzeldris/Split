@@ -309,3 +309,10 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
 }
 @keyframes sa-pop { 0%, 56% { transform: scale(1); } 62% { transform: scale(1.18); } 70%, 100% { transform: scale(1); } }
 @keyframes sa-amount { 0%, 60% { opacity: 0; transform: translateY(6px); } 68%, 92% { opacity: 1; transform: translateY(0); } 98%, 100% { opacity: 0; transform: translateY(0); } }
+
+/* Theme switch: a single 250ms cross-fade of the whole page. Rare action, so a little motion is fine; it is
+   opacity only, so it stays as-is under prefers-reduced-motion. */
+::view-transition-old(root), ::view-transition-new(root) {
+  animation-duration: 250ms;
+  animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
+}
