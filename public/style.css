@@ -128,7 +128,7 @@ input {
 }
 input { font-weight: 400; } /* inputs inside a bold <label> must not inherit its weight */
 input[data-field=merchant] { font-weight: 600; }
-input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+input:focus-visible, button:focus-visible, a.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 button {
   min-height: 44px;
@@ -392,4 +392,13 @@ button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
 @media (prefers-reduced-motion: no-preference) {
   #photo-dialog[open] { opacity: 1; scale: 1; transition: opacity 200ms cubic-bezier(0.23, 1, 0.32, 1), scale 200ms cubic-bezier(0.23, 1, 0.32, 1); }
   @starting-style { #photo-dialog[open] { opacity: 0; scale: 0.96; } }
+}
+
+/* "Back to home" hover: the fill tints to the accent and the outline picks up the accent, 150ms ease. Colour only (no
+   movement), real pointers only; the colour still changes under reduced motion, just without the fade. */
+@media (prefers-reduced-motion: no-preference) {
+  a.btn { transition-property: scale, background-color, border-color; }
+}
+@media (hover: hover) and (pointer: fine) {
+  a.btn:hover { background: var(--accent-soft); border-color: var(--accent); }
 }
