@@ -40,6 +40,8 @@ function setup({ passcode = "letmein" } = {}) {
 async function openBill(bills) {
   const [status, created] = await bills.create({ passcode: "letmein", payer: { name: "Angela", email: "angela@example.com" }, image: IMAGE });
   assert.equal(status, 201);
+  // What the "reading" screen lists before moving on.
+  assert.deepEqual(created.found, { merchant: "Test Diner", items: [{ name: "Burger", priceCents: 2000 }, { name: "Fries", priceCents: 600 }, { name: "Lemonade", priceCents: 1000 }] });
   const { billId, adminToken, payerId, payerToken } = created;
   assert.deepEqual(await bills.open(billId, adminToken), [200, { ok: true }]);
   const [, ben] = await bills.join(billId, { name: "Ben" });

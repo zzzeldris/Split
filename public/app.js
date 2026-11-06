@@ -214,10 +214,11 @@ function renderCreate() {
     const fields = new FormData(form);
     button.disabled = true;
     errorEl.textContent = "";
+    const busy = showBusy(fields.get("photo"));
     try {
-      button.textContent = "Shrinking photo…";
+      busy.step("Shrinking photo…");
       const image = await resizeImage(fields.get("photo"));
-      button.textContent = "Reading receipt with Gemini…";
+      busy.step("Reading the receipt with Gemini…");
       const { ok, data } = await api("POST", "/api/bills", {
         passcode: fields.get("passcode") ?? undefined,
         payer: { name: fields.get("name"), email: fields.get("email") },
@@ -226,13 +227,48 @@ function renderCreate() {
       if (!ok) throw new Error(data.error ?? "Something went wrong");
       storage.set(`admin:${data.billId}`, data.adminToken);
       storage.set(`person:${data.billId}`, { personId: data.payerId, token: data.payerToken });
+      await busy.reveal(data.found);
       location.href = `/?b=${data.billId}`;
     } catch (err) {
+      busy.close();
       errorEl.textContent = err.message;
       button.disabled = false;
       button.textContent = "Read receipt";
     }
   });
+}
+
+// A full-screen "working on it" view, so a slow AI read doesn't look like a frozen page.
+function showBusy(photo) {
+  const el = document.createElement("div");
+  el.className = "busy";
+  el.innerHTML = `
+    <div class="scan-frame"><img alt="" src="${URL.createObjectURL(photo)}"><div class="scan-line" aria-hidden="true"></div></div>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="busy-text" role="status"></p>
+    <ul class="found" hidden></ul>`;
+  document.body.append(el);
+  const text = el.querySelector(".busy-text");
+  return {
+    step: (t) => (text.textContent = t),
+    close: () => el.remove(),
+    // Lists the items the AI found, one row after another, then resolves so the page can move on.
+    reveal(found) {
+      const items = found?.items ?? [];
+      if (!items.length) return Promise.resolve();
+      const SHOWN = 6;
+      const rows = items.slice(0, SHOWN).map((item) => `<li><span>${esc(item.name)}</span><span>${money(item.priceCents)}</span></li>`);
+      if (items.length > SHOWN) rows.push(`<li class="muted"><span>+ ${items.length - SHOWN} more</span><span></span></li>`);
+      el.classList.add("done");
+      text.textContent = `Found ${items.length} item${items.length === 1 ? "" : "s"}${found.merchant ? ` at ${found.merchant}` : ""}`;
+      const list = el.querySelector(".found");
+      list.innerHTML = rows.join("");
+      list.querySelectorAll("li").forEach((li, i) => li.style.setProperty("--i", i));
+      list.hidden = false;
+      const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      return new Promise((resolve) => setTimeout(resolve, calm ? 900 : rows.length * 70 + 900));
+    },
+  };
 }
 
 // Scale to at most 1600 px on the long side and re-encode as JPEG, so uploads stay small.

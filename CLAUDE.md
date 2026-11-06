@@ -17,6 +17,7 @@ A user photographs a receipt. AI (Gemini) reads it into structured items. The ap
 - `lib/store.js` is Upstash Redis over REST (plain `fetch`). With no `UPSTASH_*` env vars it falls back to an in-memory store, which loses everything on restart.
 - `lib/receipt.js` holds the Gemini prompt and schema, shared by the server and `scripts/receipt.mjs`. It retries Gemini 429 and 503 errors, which the free tier returns often.
 - `public/` is the frontend: one page (`app.js`, an ES module, vanilla JS, PayPal web SDK v6 loaded with a URL from `/api/config`).
+- While Gemini reads, a full-screen view (`showBusy` in `app.js`) sweeps a scan line over the photo, then lists the items it found (`found` in the `POST /api/bills` response) before opening the review page.
 - `scripts/` holds standalone experiment scripts. Run them from the project root (e.g. `node scripts/receipt.mjs`) so `dotenv` finds `.env`.
 - `scripts/test.mjs` is a Gemini "hello" check. **It works**, so the key is valid.
 - `test-receipts/` holds receipt photos for testing. It's gitignored (except `.gitkeep`) because receipts can contain personal data and the repo is public.
