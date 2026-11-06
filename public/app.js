@@ -142,6 +142,7 @@ function renderCreate() {
     <header class="app-bar"><img src="/icon.svg" alt="" width="32" height="32"><h1>Split the bill</h1></header>
     ${installBanner()}
     <form class="stack" id="create" novalidate>
+      ${recent.length ? "" : heroArt()}
       <section class="card stack">
         <label class="camera-btn">
           <input type="file" name="photo" accept="image/*" capture="environment" hidden>
@@ -232,6 +233,7 @@ function renderCreate() {
       storage.set(`admin:${data.billId}`, data.adminToken);
       storage.set(`person:${data.billId}`, { personId: data.payerId, token: data.payerToken });
       rememberBill(data.billId, { status: "draft" });
+      await busy.reveal(data.found);
       location.href = `/?b=${data.billId}`;
     } catch (err) {
       busy.close();
@@ -244,12 +246,75 @@ function renderCreate() {
 function showBusy(photo) {
   const el = document.createElement("div");
   el.className = "busy";
-  el.innerHTML = `<img alt="" src="${URL.createObjectURL(photo)}"><div class="spinner" aria-hidden="true"></div><p class="busy-text" role="status"></p>`;
+  el.innerHTML = `
+    <div class="scan-frame"><img alt="" src="${URL.createObjectURL(photo)}"><div class="scan-line" aria-hidden="true"></div></div>
+    <div class="spinner" aria-hidden="true"></div>
+    <p class="busy-text" role="status"></p>
+    <ul class="found" hidden></ul>`;
   document.body.append(el);
+  const text = el.querySelector(".busy-text");
   return {
-    step: (text) => (el.querySelector(".busy-text").textContent = text),
+    step: (t) => (text.textContent = t),
     close: () => el.remove(),
+    // Lists the items the AI found, one row after another, then resolves so the page can move on.
+    reveal(found) {
+      const items = found?.items ?? [];
+      if (!items.length) return Promise.resolve();
+      const SHOWN = 6;
+      const rows = items.slice(0, SHOWN).map((item) => `<li><span>${esc(item.name)}</span><span>${money(item.priceCents)}</span></li>`);
+      if (items.length > SHOWN) rows.push(`<li class="muted"><span>+ ${items.length - SHOWN} more</span><span></span></li>`);
+      el.classList.add("done");
+      text.textContent = `Found ${items.length} item${items.length === 1 ? "" : "s"}${found.merchant ? ` at ${found.merchant}` : ""}`;
+      const list = el.querySelector(".found");
+      list.innerHTML = rows.join("");
+      list.querySelectorAll("li").forEach((li, i) => li.style.setProperty("--i", i));
+      list.hidden = false;
+      const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      return new Promise((resolve) => setTimeout(resolve, calm ? 900 : rows.length * 70 + 900));
+    },
   };
+}
+
+// First-visit picture of what the app does: a receipt prints, then tears into one strip per friend.
+function heroArt() {
+  const TOP = 16, BOTTOM = 122, CUTS = [107, 133];
+  // A jagged vertical tear at x, from the top of the receipt to the bottom.
+  const tear = (x) => {
+    const pts = [];
+    for (let y = TOP, k = 0; y <= BOTTOM; y += 6, k++) pts.push(`${x + (k % 2 ? 2.5 : -2.5)},${y}`);
+    return pts;
+  };
+  const edges = [[`78,${TOP}`, `78,${BOTTOM}`], tear(CUTS[0]), tear(CUTS[1]), [`162,${TOP}`, `162,${BOTTOM}`]];
+  const strip = (n) => [...edges[n], ...[...edges[n + 1]].reverse()].join(" ");
+  const rows = [30, 42, 54, 66, 78].map((y, i) =>
+    `<rect class="ink" x="88" y="${y}" width="${[38, 30, 44, 26, 34][i]}" height="4" rx="2"/><rect class="ink" x="140" y="${y}" width="12" height="4" rx="2"/>`).join("");
+  // Drawn once per strip (not with <use>), so the page styles reach it.
+  const paper = `
+            <rect class="paper" x="78" y="${TOP - 4}" width="84" height="${BOTTOM - TOP + 4}"/>
+            ${rows}
+            <rect class="ink" x="88" y="96" width="64" height="1.5"/>
+            <rect class="ink strong" x="88" y="104" width="24" height="6" rx="2"/><rect class="ink strong" x="134" y="104" width="18" height="6" rx="2"/>`;
+  const people = [["A", 76], ["B", 120], ["C", 164]]; // under each strip once it has drifted apart
+  return `
+    <figure class="hero" aria-hidden="true">
+      <svg viewBox="0 0 240 160" width="240" height="160">
+        <defs>
+          <clipPath id="below-slot"><rect x="0" y="${TOP}" width="240" height="160"/></clipPath>
+          ${[0, 1, 2].map((n) => `<clipPath id="strip${n}"><polygon points="${strip(n)}"/></clipPath>`).join("")}
+        </defs>
+        <rect class="slot" x="62" y="10" width="116" height="7" rx="3.5"/>
+        <g clip-path="url(#below-slot)"><g class="print">
+          ${[0, 1, 2].map((n) => `
+            <g class="strip strip${n}"><g clip-path="url(#strip${n})">
+              ${paper}
+              <rect class="tint" x="70" y="${TOP - 4}" width="100" height="${BOTTOM - TOP + 4}"/>
+            </g></g>`).join("")}
+        </g></g>
+        ${people.map(([name, x], n) => `
+          <g class="person person${n}"><circle cx="${x}" cy="142" r="9"/><text x="${x}" y="146">${name}</text></g>`).join("")}
+      </svg>
+      <figcaption class="small muted">Snap the receipt. Everyone pays their part.</figcaption>
+    </figure>`;
 }
 
 // ---------- Installing to the home screen ----------
