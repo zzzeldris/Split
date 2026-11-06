@@ -1,4 +1,4 @@
-/* Look from the UI mockup: navy text, one blue accent, white rounded cards, Space Mono (400 and 700 only). */
+/* Look from the UI mockup: navy text, one blue accent, white rounded cards, Inter. */
 :root {
   --bg: #f5f7fa;
   --card: #ffffff;
@@ -46,7 +46,7 @@ body {
   padding: 0 0 120px;
   background: var(--bg);
   color: var(--text);
-  font-family: "Space Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   line-height: 1.4;
 }
 
