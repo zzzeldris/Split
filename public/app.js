@@ -7,7 +7,6 @@ const app = document.getElementById("app");
 const toastEl = document.getElementById("toast");
 const params = new URLSearchParams(location.search);
 const BILL_ID = params.get("b");
-const SHOW_LOGIN = params.has("login");
 const POLL_MS = 2500;
 
 let config;
@@ -124,7 +123,7 @@ function render() {
     return;
   }
   renderPending = false;
-  if (!BILL_ID) return SHOW_LOGIN ? renderLogin() : renderCreate();
+  if (!BILL_ID) return renderCreate();
   if (!bill) return renderMissing();
   if (bill.status === "draft") return bill.isAdmin ? renderReview() : renderWaiting();
   if (bill.status === "open") return me ? renderClaims() : renderPickName();
@@ -143,25 +142,43 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
-// Decorative loop that fills the empty scan card: a receipt is scanned, splits into coins and each coin
-// flies to a friend with their share. Pure SVG + CSS (see .split-anim in style.css).
+// Looping 8s story that fills the empty scan card, one scene per 2s: 1 scan the receipt, 2 annotate its
+// item lines, 3 cut them out as a smaller slice of the receipt with the text written out, 4 the slice splits into one chunk per line, each sent to
+// a person, who then shows their share and a check mark (no captions). Pure SVG + CSS
+// (see .split-anim in style.css); the base styles are the still frame used under reduced motion.
 const SPLIT_ANIMATION = `
   <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
-    <g class="sa-receipt">
-      <path d="M100 30h100v120l-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8z"/>
-      <path class="sa-lines" d="M114 52h44M114 70h72M114 88h58M114 106h72M114 124h36"/>
+    <g class="sb-receipt">
+      <path d="M100 90h100v120l-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8z"/>
+      <path class="sb-lines" d="M114 112h44M114 130h72M114 148h58M114 166h72M114 184h36"/>
     </g>
-    <rect class="sa-scan" x="94" y="30" width="112" height="4" rx="2"/>
-    ${[["a", -78], ["b", 0], ["c", 78]].map(([k, dx]) => `
-      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:148px"><circle cx="150" cy="78" r="14"/><text x="150" y="83.5">$</text></g>`).join("")}
-    ${[["a", 72, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 228, "C", "$9.10"]].map(([k, x, who, amount]) => `
-      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="226" r="24"/><text x="${x}" y="232">${who}</text></g>
-      <text class="sa-amount sa-${k}" x="${x}" y="270">${amount}</text>`).join("")}
+    <rect class="sb-scan" x="94" y="90" width="112" height="4" rx="2"/>
+    <g class="sb-zoom">
+      <path class="sb-slice" d="M90 106l10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5V186l-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5z"/>
+      ${[130, 148, 166].map((y, i) => `<rect class="sb-hl" style="--i:${i}" x="108" y="${y - 7}" width="84" height="14" rx="4"/>`).join("")}
+      ${[["Poutine", "12.95"], ["Club ×2", "24.00"], ["Iced tea", "4.55"]].map(([name, price], i) => `
+        <g class="sb-row" style="--i:${i}"><text class="t-l" x="112" y="${134 + i * 18}">${name}</text><text class="t-r" x="188" y="${134 + i * 18}">${price}</text></g>`).join("")}
+    </g>
+    ${[-80, 0, 80].map((dx, i) => {
+      // Each line of the small slice (where it sits once the slice has shrunk to the top) is cut out as its
+      // own chunk of receipt and sent to one person, landing just above them.
+      const y = 148 + (134 + i * 18 - 4 - 148) * 0.6 - 64;
+      return `
+      <g class="sb-send" style="--dx:${dx}px;--dy:${(113 - y).toFixed(1)}px;--i:${i}">
+        <rect x="125" y="${(y - 7).toFixed(1)}" width="50" height="14" rx="3"/>
+        <path d="M131 ${y.toFixed(1)}h20M159 ${y.toFixed(1)}h10"/>
+      </g>`;
+    }).join("")}
+    ${[["a", 70, "$12.40"], ["b", 150, "$18.20"], ["c", 230, "$9.10"]].map(([k, x, amount], i) => `
+      <g class="sb-av sb-${k}" style="--i:${i}"><circle class="sb-ring" cx="${x}" cy="151" r="20"/><circle class="sb-head" cx="${x}" cy="145" r="5.5"/><path class="sb-body" d="M${x - 9.5} 162c0-5.5 4.2-8.5 9.5-8.5s9.5 3 9.5 8.5"/></g>
+      <text class="sb-amt" style="--i:${i}" x="${x}" y="191">${amount}</text>
+      <g transform="translate(${x + 16} 135)"><g class="sb-chk" style="--i:${i}"><circle r="8"/><path d="M-3.5 .5L-1 3L3.5-2.5"/></g></g>`).join("")}
   </svg>`;
 
 function renderCreate() {
   app.innerHTML = `
     <form class="stack" id="create">
+      <p class="tagline">Scan and share your bill</p>
       <div class="scan-card" id="scan-card">
         <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
         <div class="scan-hint" id="scan-hint">
@@ -288,24 +305,6 @@ async function resizeImage(file) {
     reader.readAsDataURL(blob);
   });
   return { mimeType: "image/jpeg", data: dataUrl.slice(dataUrl.indexOf(",") + 1) };
-}
-
-// ---------- Log in (placeholder) ----------
-// Planned: "Log in with PayPal" (OAuth) so the payer doesn't re-enter their name and email.
-// Not wired up yet, so the button only says so.
-
-function renderLogin() {
-  app.innerHTML = `
-    <a class="icon-btn left" href="/" aria-label="Back to scan">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
-    </a>
-    <section class="card stack" style="gap:20px">
-      <div class="stack">
-        <h1>Log in</h1>
-      </div>
-      <button class="primary" id="paypal-login">Continue with PayPal</button>
-    </section>`;
-  document.getElementById("paypal-login").addEventListener("click", () => toast("PayPal login isn't connected yet."));
 }
 
 // ---------- Review (payer, draft) ----------

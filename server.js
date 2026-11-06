@@ -158,7 +158,8 @@ async function handleWebhook(req, res) {
 
 // ---------- HTTP server ----------
 
-const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml" };
+const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml",
+  ".png": "image/png" };
 const LIB_DIR = join(import.meta.dirname, "lib");
 // lib/ files the browser imports (the same split math the server uses). Nothing else in lib/ is served.
 const BROWSER_LIB = new Set(["/lib/split.js", "/lib/shares.js"]);
