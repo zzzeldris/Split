@@ -285,7 +285,7 @@ paypal-button { display: block; width: 100%; }
 .split-anim .t-r { text-anchor: end; }
 .sb-receipt path { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
 .sb-receipt .sb-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
-.sb-hl { fill: var(--accent); fill-opacity: 0.25; transform-box: fill-box; transform-origin: left center; }
+.sb-hl { fill: var(--accent); fill-opacity: 0.2; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; transform-box: fill-box; transform-origin: left center; } /* solid accent border so the annotation reads clearly; the stroke keeps its width while the bar grows */
 .sb-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
 .sb-zoom { transform-box: view-box; transform-origin: 150px 148px; }
 .sb-slice { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
