@@ -76,7 +76,7 @@ main { max-width: 560px; margin: 0 auto; padding: 24px 16px 0; display: grid; gr
   align-items: center;
   justify-content: center;
   min-height: 80px;
-  padding: 16px 128px;
+  padding: 16px 72px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -100,12 +100,10 @@ main { max-width: 560px; margin: 0 auto; padding: 24px 16px 0; display: grid; gr
   text-decoration: none;
 }
 .icon-btn.right { right: 16px; }
-.icon-btn.right-2 { right: 72px; }
 button.icon-btn { padding: 0; }
 #theme-toggle .icon-sun { display: none; }
 :root[data-theme="dark"] #theme-toggle .icon-sun { display: block; }
 :root[data-theme="dark"] #theme-toggle .icon-moon { display: none; }
-.icon-btn.left { left: 16px; }
 .icon-btn svg { width: 24px; height: 24px; }
 
 h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -0.01em; }
@@ -289,7 +287,7 @@ paypal-button { display: block; width: 100%; }
 .sb-receipt .sb-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
 .sb-hl { fill: var(--accent); fill-opacity: 0.25; transform-box: fill-box; transform-origin: left center; }
 .sb-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
-.sb-zoom { transform-box: view-box; transform-origin: 150px 88px; }
+.sb-zoom { transform-box: view-box; transform-origin: 150px 148px; }
 .sb-slice { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
 .sb-zoom text { font-size: 10px; font-weight: 600; }
 .sb-send rect { fill: var(--card); stroke: var(--text); stroke-width: 2; }
@@ -304,7 +302,7 @@ paypal-button { display: block; width: 100%; }
 .sb-av, .sb-chk, .sb-receipt { transform-box: fill-box; transform-origin: center; }
 /* last frame (also the reduced-motion frame) */
 .sb-receipt, .sb-hl, .sb-scan { opacity: 0; }
-.sb-zoom { opacity: 0; transform: translateY(-26px) scale(0.6); }
+.sb-zoom { opacity: 0; transform: translateY(-64px) scale(0.6); }
 .sb-send { transform: translate(var(--dx), var(--dy)); }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -325,8 +323,8 @@ paypal-button { display: block; width: 100%; }
 @keyframes sb-zoom {
   0%, 52% { opacity: 1; transform: translateY(0) scale(1); }
   60%, 74% { opacity: 1; transform: translateY(0) scale(1.3); }
-  80%, 96% { opacity: 1; transform: translateY(-26px) scale(0.6); }
-  99%, 100% { opacity: 0; transform: translateY(-26px) scale(0.6); }
+  80%, 96% { opacity: 1; transform: translateY(-64px) scale(0.6); }
+  99%, 100% { opacity: 0; transform: translateY(-64px) scale(0.6); }
 }
 @keyframes sb-slice { 0%, 50% { opacity: 0; } 56%, 81% { opacity: 1; } 83%, 100% { opacity: 0; } }
 @keyframes sb-row { 0%, 54% { opacity: 0; transform: translateY(6px); } 60%, 81% { opacity: 1; transform: translateY(0); } 83%, 100% { opacity: 0; transform: translateY(0); } }
