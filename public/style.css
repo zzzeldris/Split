@@ -275,7 +275,7 @@ paypal-button { display: block; width: 100%; }
 :root[data-theme="dark"] .scan-card img { outline-color: oklch(1 0 0 / 0.1); }
 
 
-/* Empty scan card: a 12s story, 3s per scene (no captions). 1 scan the receipt (0-25%), 2 highlight its item lines (25-50%),
+/* Empty scan card: an 8s story, 2s per scene (no captions). 1 scan the receipt (0-25%), 2 highlight its item lines (25-50%),
    3 trim the receipt to just those lines, zoom in and write them out (50-75%), 4 the slice shrinks to the top and splits into one chunk per line, each
    sent to a person, who shows their share and a check mark (75-100%). The base styles below are the last frame, which is what people with
    reduced motion see. */
@@ -306,16 +306,16 @@ paypal-button { display: block; width: 100%; }
 .sb-send { transform: translate(var(--dx), var(--dy)); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sb-receipt { animation: sb-receipt 12s var(--ease-out) infinite both; }
-  .sb-scan { animation: sb-scan 12s linear infinite both; } /* constant sweep */
-  .sb-hl { animation: sb-hl 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.15s); }
-  .sb-zoom { animation: sb-zoom 12s var(--ease-in-out) infinite both; }
-  .sb-slice { animation: sb-slice 12s var(--ease-out) infinite both; }
-  .sb-row { animation: sb-row 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.15s); }
-  .sb-av { animation: sb-av 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
-  .sb-send { animation: sb-send 12s var(--ease-in-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
-  .sb-amt { animation: sb-amt 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
-  .sb-chk { animation: sb-chk 12s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-receipt { animation: sb-receipt 8s var(--ease-out) infinite both; }
+  .sb-scan { animation: sb-scan 8s linear infinite both; } /* constant sweep */
+  .sb-hl { animation: sb-hl 8s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.15s); }
+  .sb-zoom { animation: sb-zoom 8s var(--ease-in-out) infinite both; }
+  .sb-slice { animation: sb-slice 8s var(--ease-out) infinite both; }
+  .sb-row { animation: sb-row 8s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.15s); }
+  .sb-av { animation: sb-av 8s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-send { animation: sb-send 8s var(--ease-in-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-amt { animation: sb-amt 8s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-chk { animation: sb-chk 8s var(--ease-out) infinite both; animation-delay: calc(var(--i) * 0.12s); }
 }
 @keyframes sb-receipt { 0% { opacity: 0; transform: translateY(12px); } 4% { opacity: 1; transform: translateY(0); } 48% { opacity: 1; transform: translateY(0); } 56%, 100% { opacity: 0; transform: translateY(0); } }
 @keyframes sb-scan { 0%, 5% { opacity: 0; transform: translateY(0); } 7% { opacity: 1; } 19% { opacity: 1; transform: translateY(116px); } 22%, 100% { opacity: 0; transform: translateY(116px); } }

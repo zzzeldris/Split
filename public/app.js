@@ -142,7 +142,7 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
-// Looping 12s story that fills the empty scan card, one scene per 3s: 1 scan the receipt, 2 annotate its
+// Looping 8s story that fills the empty scan card, one scene per 2s: 1 scan the receipt, 2 annotate its
 // item lines, 3 cut them out as a smaller slice of the receipt with the text written out, 4 the slice splits into one chunk per line, each sent to
 // a person, who then shows their share and a check mark (no captions). Pure SVG + CSS
 // (see .split-anim in style.css); the base styles are the still frame used under reduced motion.
@@ -154,7 +154,7 @@ const SPLIT_ANIMATION = `
     </g>
     <rect class="sb-scan" x="94" y="90" width="112" height="4" rx="2"/>
     <g class="sb-zoom">
-      <path class="sb-slice" d="M100 116l10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5V175l-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5z"/>
+      <path class="sb-slice" d="M90 106l10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5 10 5 10-5V186l-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5-10 5-10-5z"/>
       ${[130, 148, 166].map((y, i) => `<rect class="sb-hl" style="--i:${i}" x="108" y="${y - 7}" width="84" height="14" rx="4"/>`).join("")}
       ${[["Poutine", "12.95"], ["Club ×2", "24.00"], ["Iced tea", "4.55"]].map(([name, price], i) => `
         <g class="sb-row" style="--i:${i}"><text class="t-l" x="112" y="${134 + i * 18}">${name}</text><text class="t-r" x="188" y="${134 + i * 18}">${price}</text></g>`).join("")}
