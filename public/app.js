@@ -143,20 +143,32 @@ document.addEventListener("pointercancel", releasePointer, true);
 
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
-// Decorative loop that fills the empty scan card: a receipt is scanned, splits into coins and each coin
-// flies to a friend with their share. Pure SVG + CSS (see .split-anim in style.css).
+// Looping 12s story that fills the empty scan card, one scene per 3s: 1 scan the receipt, 2 annotate its
+// lines, 3 transcribe them into a table, 4 split the total and collect it from friends. Pure SVG + CSS
+// (see .split-anim in style.css); the base styles are the still frame used under reduced motion.
 const SPLIT_ANIMATION = `
   <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
-    <g class="sa-receipt">
+    <g class="sb-receipt">
       <path d="M100 30h100v120l-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8-10-8-10 8z"/>
-      <path class="sa-lines" d="M114 52h44M114 70h72M114 88h58M114 106h72M114 124h36"/>
+      <path class="sb-lines" d="M114 52h44M114 70h72M114 88h58M114 106h72M114 124h36"/>
     </g>
-    <rect class="sa-scan" x="94" y="30" width="112" height="4" rx="2"/>
-    ${[["a", -78], ["b", 0], ["c", 78]].map(([k, dx]) => `
-      <g class="sa-chip sa-${k}" style="--dx:${dx}px;--dy:148px"><circle cx="150" cy="78" r="14"/><text x="150" y="83.5">$</text></g>`).join("")}
-    ${[["a", 72, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 228, "C", "$9.10"]].map(([k, x, who, amount]) => `
-      <g class="sa-avatar sa-${k}"><circle cx="${x}" cy="226" r="24"/><text x="${x}" y="232">${who}</text></g>
-      <text class="sa-amount sa-${k}" x="${x}" y="270">${amount}</text>`).join("")}
+    ${[52, 70, 88, 106, 124].map((y, i) => `<rect class="sb-hl" style="--i:${i}" x="108" y="${y - 7}" width="84" height="14" rx="4"/>`).join("")}
+    <rect class="sb-scan" x="94" y="30" width="112" height="4" rx="2"/>
+    <g class="sb-table">
+      <rect class="sb-table-bg" x="70" y="48" width="160" height="112" rx="10"/>
+      <path class="sb-table-head" d="M70 58a10 10 0 0 1 10-10h140a10 10 0 0 1 10 10v16H70z"/>
+      <text class="t-l" x="84" y="66">Item</text><text class="t-r" x="216" y="66">Price</text>
+      ${[["Poutine", "12.95"], ["Club sandwich", "24.00"], ["Iced tea", "4.55"]].map(([name, price], i) => `
+        <g class="sb-row" style="--i:${i}"><text class="t-l" x="84" y="${96 + i * 26}">${name}</text><text class="t-r" x="216" y="${96 + i * 26}">${price}</text></g>`).join("")}
+    </g>
+    ${[["a", -80], ["b", 0], ["c", 80]].map(([k, dx], i) => `
+      <g class="sb-chip sb-${k}" style="--dx:${dx}px;--dy:106px;--i:${i}"><circle cx="150" cy="100" r="10"/><text x="150" y="104">$</text></g>`).join("")}
+    ${[["a", 70, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 230, "C", "$9.10"]].map(([k, x, who, amount], i) => `
+      <g class="sb-av sb-${k}" style="--i:${i}"><circle cx="${x}" cy="206" r="20"/><text x="${x}" y="212">${who}</text></g>
+      <text class="sb-amt" style="--i:${i}" x="${x}" y="246">${amount}</text>
+      <g transform="translate(${x + 16} 190)"><g class="sb-chk" style="--i:${i}"><circle r="8"/><path d="M-3.5 .5L-1 3L3.5-2.5"/></g></g>`).join("")}
+    ${["1 · Scan the receipt", "2 · Annotate the lines", "3 · Transcribe to a table", "4 · Split and collect"].map((t, i) => `
+      <text class="sb-cap sb-cap${i + 1}" x="150" y="286">${t}</text>`).join("")}
   </svg>`;
 
 function renderCreate() {

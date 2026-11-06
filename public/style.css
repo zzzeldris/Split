@@ -289,48 +289,75 @@ button, .scan-btn, a.btn { -webkit-tap-highlight-color: transparent; }
   button.link:active { scale: 1; }
 }
 
-/* Empty scan card: scan the receipt (4-28% of the loop), split it into coins (30-58%), coins land on
-   friends who pop and show their share (58-92%). Under reduced motion it is one still frame. */
+/* Empty scan card: a 12s story, 3s per scene. 1 scan the receipt (0-25%), 2 highlight its lines (25-50%),
+   3 transcribe them into a table (50-75%), 4 split into coins that reach friends, who show their share and
+   a check mark once collected (75-100%). The base styles below are the last frame, which is what people with
+   reduced motion see. */
 .split-anim { display: block; width: 100%; height: 100%; }
 .split-anim text { font-family: inherit; text-anchor: middle; font-weight: 700; fill: var(--text); }
-.sa-receipt path { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; transform-box: fill-box; transform-origin: center; }
-.sa-receipt .sa-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
-.sa-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
-.sa-chip circle { stroke: none; }
-.sa-chip text { font-size: 16px; fill: #fff; }
-.sa-chip.sa-a circle, .sa-avatar.sa-a circle { --c: #3b82f6; }
-.sa-chip.sa-b circle, .sa-avatar.sa-b circle { --c: #22a06b; }
-.sa-chip.sa-c circle, .sa-avatar.sa-c circle { --c: #e08a1e; }
-.sa-chip circle { fill: var(--c); }
-.sa-avatar circle { fill: var(--accent-soft); stroke: var(--c); stroke-width: 3.5; }
-.sa-avatar text { font-size: 18px; }
-.sa-amount { font-size: 16px; }
-.sa-chip, .sa-avatar, .sa-amount { transform-box: fill-box; transform-origin: center; }
+.split-anim .t-l { text-anchor: start; }
+.split-anim .t-r { text-anchor: end; }
+.sb-receipt path { fill: var(--card); stroke: var(--text); stroke-width: 3; stroke-linejoin: round; }
+.sb-receipt .sb-lines { fill: none; stroke: var(--muted); stroke-width: 3; stroke-linecap: round; }
+.sb-hl { fill: var(--accent); fill-opacity: 0.25; transform-box: fill-box; transform-origin: left center; }
+.sb-scan { fill: var(--accent); filter: drop-shadow(0 0 4px var(--accent)); }
+.sb-table { transform-box: view-box; transform-origin: 150px 48px; }
+.sb-table-bg { fill: var(--card); stroke: var(--text); stroke-width: 3; }
+.sb-table-head { fill: var(--accent-soft); }
+.sb-table text { font-size: 12px; font-weight: 600; }
+.sb-chip circle { fill: var(--c); }
+.sb-chip text { font-size: 12px; fill: #fff; }
+.sb-av circle { fill: var(--accent-soft); stroke: var(--c); stroke-width: 3.5; }
+.sb-av text { font-size: 17px; }
+.sb-amt { font-size: 15px; }
+.sb-chk circle { fill: #22a06b; }
+.sb-chk path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sb-cap { font-size: 15px; }
+.sb-a { --c: #3b82f6; } .sb-b { --c: #22a06b; } .sb-c { --c: #e08a1e; }
+.sb-av, .sb-chip, .sb-chk, .sb-receipt { transform-box: fill-box; transform-origin: center; }
+/* last frame (also the reduced-motion frame) */
+.sb-receipt, .sb-hl, .sb-scan, .sb-chip, .sb-cap { opacity: 0; }
+.sb-cap4 { opacity: 1; }
+.sb-table { transform: scale(0.6); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .sa-receipt path { animation: sa-receipt 6s ease-in-out infinite; }
-  .sa-scan { animation: sa-scan 6s ease-in-out infinite both; }
-  .sa-chip { animation: sa-fly 6s ease-in-out infinite both; }
-  .sa-chip.sa-b { animation-delay: 0.12s; }
-  .sa-chip.sa-c { animation-delay: 0.24s; }
-  .sa-avatar { animation: sa-pop 6s ease-out infinite both; }
-  .sa-amount { animation: sa-amount 6s ease-out infinite both; }
-  .sa-avatar.sa-b, .sa-amount.sa-b { animation-delay: 0.12s; }
-  .sa-avatar.sa-c, .sa-amount.sa-c { animation-delay: 0.24s; }
+  .sb-receipt { animation: sb-receipt 12s ease-out infinite both; }
+  .sb-scan { animation: sb-scan 12s ease-in-out infinite both; }
+  .sb-hl { animation: sb-hl 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.15s); }
+  .sb-table { animation: sb-table 12s cubic-bezier(0.77, 0, 0.175, 1) infinite both; }
+  .sb-row { animation: sb-row 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.15s); }
+  .sb-av { animation: sb-av 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-chip { animation: sb-fly 12s ease-in-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-amt { animation: sb-amt 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-chk { animation: sb-chk 12s ease-out infinite both; animation-delay: calc(var(--i) * 0.12s); }
+  .sb-cap1 { animation: sb-cap1 12s ease-out infinite both; }
+  .sb-cap2 { animation: sb-cap2 12s ease-out infinite both; }
+  .sb-cap3 { animation: sb-cap3 12s ease-out infinite both; }
+  .sb-cap4 { animation: sb-cap4 12s ease-out infinite both; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .sa-chip, .sa-scan { display: none; }
+@keyframes sb-receipt { 0% { opacity: 0; transform: translateY(12px); } 4% { opacity: 1; transform: translateY(0); } 48% { opacity: 1; transform: scale(1); } 54%, 100% { opacity: 0; transform: scale(0.94); } }
+@keyframes sb-scan { 0%, 5% { opacity: 0; transform: translateY(0); } 7% { opacity: 1; } 19% { opacity: 1; transform: translateY(116px); } 22%, 100% { opacity: 0; transform: translateY(116px); } }
+@keyframes sb-hl { 0%, 26% { opacity: 1; transform: scaleX(0); } 31%, 48% { opacity: 1; transform: scaleX(1); } 52%, 100% { opacity: 0; transform: scaleX(1); } }
+@keyframes sb-table {
+  0%, 50% { opacity: 0; transform: translateY(12px) scale(1); }
+  54%, 74% { opacity: 1; transform: translateY(0) scale(1); }
+  80%, 96% { opacity: 1; transform: translateY(0) scale(0.6); }
+  99%, 100% { opacity: 0; transform: translateY(0) scale(0.6); }
 }
-@keyframes sa-receipt { 0%, 28% { transform: scale(1); } 31% { transform: scale(0.95); } 38%, 100% { transform: scale(1); } }
-@keyframes sa-scan { 0%, 4% { opacity: 0; transform: translateY(0); } 6% { opacity: 1; } 26% { opacity: 1; transform: translateY(116px); } 29%, 100% { opacity: 0; transform: translateY(116px); } }
-@keyframes sa-fly {
-  0%, 30% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  36% { opacity: 1; transform: translate(0, 0) scale(1); }
-  58% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); }
-  62%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.4); }
+@keyframes sb-row { 0%, 52% { opacity: 0; transform: translateY(6px); } 58%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sb-av { 0%, 75% { opacity: 0; transform: scale(0.9); } 79%, 96% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes sb-fly {
+  0%, 80% { opacity: 0; transform: translate(0, 0) scale(0.5); }
+  82% { opacity: 1; transform: translate(0, 0) scale(1); }
+  88% { opacity: 1; transform: translate(var(--dx), var(--dy)) scale(1); }
+  90%, 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(0.5); }
 }
-@keyframes sa-pop { 0%, 56% { transform: scale(1); } 62% { transform: scale(1.18); } 70%, 100% { transform: scale(1); } }
-@keyframes sa-amount { 0%, 60% { opacity: 0; transform: translateY(6px); } 68%, 92% { opacity: 1; transform: translateY(0); } 98%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sb-amt { 0%, 86% { opacity: 0; transform: translateY(4px); } 90%, 96% { opacity: 1; transform: translateY(0); } 99%, 100% { opacity: 0; transform: translateY(0); } }
+@keyframes sb-chk { 0%, 91% { opacity: 0; transform: scale(0.5); } 94%, 96% { opacity: 1; transform: scale(1); } 99%, 100% { opacity: 0; transform: scale(1); } }
+@keyframes sb-cap1 { 0% { opacity: 0; } 2%, 22% { opacity: 1; } 25%, 100% { opacity: 0; } }
+@keyframes sb-cap2 { 0%, 25% { opacity: 0; } 27%, 47% { opacity: 1; } 50%, 100% { opacity: 0; } }
+@keyframes sb-cap3 { 0%, 50% { opacity: 0; } 52%, 72% { opacity: 1; } 75%, 100% { opacity: 0; } }
+@keyframes sb-cap4 { 0%, 75% { opacity: 0; } 77%, 96% { opacity: 1; } 99%, 100% { opacity: 0; } }
 
 /* Theme switch: a single 250ms cross-fade of the whole page. Rare action, so a little motion is fine; it is
    opacity only, so it stays as-is under prefers-reduced-motion. */
