@@ -326,14 +326,15 @@ button, .scan-btn { -webkit-tap-highlight-color: transparent; }
   animation-timing-function: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
-/* Logo hover: the two halves slide apart along the slash (200ms, strong ease-out). Hover only on real pointers,
-   also on keyboard focus, and left out under reduced motion. */
+/* Logo hover: the two halves shear sideways, 0.03em further apart each (about 1px), 150ms strong ease-out. It
+   is seen on every page, so it stays near-imperceptible. Hover only on real pointers, also on keyboard focus,
+   and left out under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .logo-top, .logo-bottom { transition: transform 200ms cubic-bezier(0.23, 1, 0.32, 1); }
-  .wordmark:focus-visible .logo-top { transform: translate(-0.08em, -0.06em); }
-  .wordmark:focus-visible .logo-bottom { transform: translate(0.08em, 0.06em); }
+  .logo-top, .logo-bottom { transition: transform 150ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .wordmark:focus-visible .logo-top { transform: translateX(-0.05em); }
+  .wordmark:focus-visible .logo-bottom { transform: translateX(0.05em); }
 }
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
-  .wordmark:hover .logo-top { transform: translate(-0.08em, -0.06em); }
-  .wordmark:hover .logo-bottom { transform: translate(0.08em, 0.06em); }
+  .wordmark:hover .logo-top { transform: translateX(-0.05em); }
+  .wordmark:hover .logo-bottom { transform: translateX(0.05em); }
 }
