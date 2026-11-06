@@ -144,7 +144,7 @@ document.addEventListener("pointercancel", releasePointer, true);
 const CLOSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>`;
 const CAMERA_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l1.5-2h7L17 8h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
 // Looping 12s story that fills the empty scan card, one scene per 3s: 1 scan the receipt, 2 annotate its
-// lines, 3 transcribe them into a table, 4 split the total and collect it from friends. Pure SVG + CSS
+// lines, 3 transcribe them into a table, 4 split the total and collect it from friends (no captions). Pure SVG + CSS
 // (see .split-anim in style.css); the base styles are the still frame used under reduced motion.
 const SPLIT_ANIMATION = `
   <svg class="split-anim" viewBox="0 0 300 300" aria-hidden="true" focusable="false">
@@ -163,12 +163,10 @@ const SPLIT_ANIMATION = `
     </g>
     ${[["a", -80], ["b", 0], ["c", 80]].map(([k, dx], i) => `
       <g class="sb-chip sb-${k}" style="--dx:${dx}px;--dy:106px;--i:${i}"><circle cx="150" cy="100" r="10"/><text x="150" y="104">$</text></g>`).join("")}
-    ${[["a", 70, "A", "$12.40"], ["b", 150, "B", "$18.20"], ["c", 230, "C", "$9.10"]].map(([k, x, who, amount], i) => `
-      <g class="sb-av sb-${k}" style="--i:${i}"><circle cx="${x}" cy="206" r="20"/><text x="${x}" y="212">${who}</text></g>
+    ${[["a", 70, "$12.40"], ["b", 150, "$18.20"], ["c", 230, "$9.10"]].map(([k, x, amount], i) => `
+      <g class="sb-av sb-${k}" style="--i:${i}"><circle class="sb-ring" cx="${x}" cy="206" r="20"/><circle class="sb-head" cx="${x}" cy="200" r="5.5"/><path class="sb-body" d="M${x - 9.5} 217c0-5.5 4.2-8.5 9.5-8.5s9.5 3 9.5 8.5"/></g>
       <text class="sb-amt" style="--i:${i}" x="${x}" y="246">${amount}</text>
       <g transform="translate(${x + 16} 190)"><g class="sb-chk" style="--i:${i}"><circle r="8"/><path d="M-3.5 .5L-1 3L3.5-2.5"/></g></g>`).join("")}
-    ${["1 · Scan the receipt", "2 · Annotate the lines", "3 · Transcribe to a table", "4 · Split and collect"].map((t, i) => `
-      <text class="sb-cap sb-cap${i + 1}" x="150" y="286">${t}</text>`).join("")}
   </svg>`;
 
 function renderCreate() {
