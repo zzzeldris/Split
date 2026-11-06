@@ -158,8 +158,8 @@ function renderCreate() {
       <section class="card stack" id="details" hidden>
         ${config.passcodeRequired ? `<label>Demo passcode<input name="passcode" required autocomplete="off"></label>` : ""}
         <label>Your name<input name="name" required maxlength="30" autocomplete="given-name"></label>
-        <label>Your PayPal email (where friends pay you)<input name="email" type="email" required autocomplete="email"></label>
-        <p class="small muted">Sandbox demo: please don't upload receipts with personal or card details. Everyone claims what they had on their own phone, then pays you back with PayPal.</p>
+        <label>Your PayPal email<input name="email" type="email" required autocomplete="email"></label>
+        <p class="small muted">Demo: no receipts with personal or card details.</p>
         <button class="primary" type="submit">Read receipt</button>
         <p class="error-text small" id="create-error"></p>
       </section>
@@ -249,11 +249,8 @@ function renderLogin() {
     <section class="card stack" style="gap:20px">
       <div class="stack">
         <h1>Log in</h1>
-        <p class="muted">Log in once with PayPal, so you don't have to enter your details each time you split a bill.</p>
       </div>
       <button class="primary" id="paypal-login">Continue with PayPal</button>
-      <div class="divider">or</div>
-      <a href="/" class="small" style="text-align:center">Keep going without logging in</a>
     </section>`;
   document.getElementById("paypal-login").addEventListener("click", () => toast("PayPal login isn't connected yet."));
 }
@@ -279,16 +276,12 @@ function renderReview() {
   }
   const tipPcts = [15, 18, 20];
 
-  const matches = checks.length === 0;
   app.innerHTML = `
     <header class="stack">
       <h1>Check the receipt</h1>
-      <p class="muted">Gemini read this from your photo. Fix anything it got wrong before your friends claim items.</p>
       <button class="link small" id="photo" style="justify-self:start">View receipt photo</button>
     </header>
-    ${matches
-      ? `<p class="notice ok">✓ The totals match the receipt.</p>`
-      : checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
+    ${checks.map((c) => `<p class="notice warn">${esc(c)}</p>`).join("")}
     <section class="card stack">
       <label>Place<input data-field="merchant" value="${esc(draft.merchant)}" maxlength="100"></label>
       <h2 class="section-title">Items</h2>
@@ -371,7 +364,7 @@ function renderWaiting() {
   app.innerHTML = `
     <section class="card stack">
       <h1>Almost ready</h1>
-      <p class="muted">${esc(bill.payer.name)} is checking the receipt. This page updates by itself.</p>
+      <p class="muted">${esc(bill.payer.name)} is checking the receipt.</p>
     </section>`;
 }
 
@@ -379,7 +372,6 @@ function renderMissing() {
   app.innerHTML = `
     <section class="card stack">
       <h1>Bill not found</h1>
-      <p class="muted">This bill has expired or doesn't exist.</p>
       <a href="/">Start a new bill</a>
     </section>`;
 }
@@ -455,7 +447,6 @@ function renderClaims() {
   app.innerHTML = `
     ${billHeader()}
     ${bill.isAdmin ? adminPanel(unclaimed) : ""}
-    <p class="muted small">Tap how much of each item you had. If the shares on an item don't add up to 100%, it's split in proportion: 50% and 10% becomes 5 to 1.</p>
     ${bill.receipt.items.map((item) => {
       const mine = myClaims[item.id] ?? 0;
       const rows = itemClaims(item.id, bill.people, claims);
@@ -470,12 +461,12 @@ function renderClaims() {
             ${chips.map((c) => `<button data-claim="${item.id}" data-pct="${c}" aria-pressed="${c === 0 ? mine === 0 && zeroed[item.id] === true : mine === c}">${c}%</button>`).join("")}
             <input aria-label="Custom percent for ${esc(item.name)}" data-custom="${item.id}" inputmode="numeric" placeholder="%" value="${chips.includes(mine) ? "" : mine}">
           </div>
-          <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · claimed ${sum}% in total, split in proportion` : ""}</p>
+          <p class="small muted">${status}${rows.length > 0 && sum !== 100 ? ` · split in proportion` : ""}</p>
         </section>`;
     }).join("")}
     <div class="footer"><div class="row">
-      <div><div class="small muted">${isPayer() ? "Your part (you already paid)" : `You owe ${esc(bill.payer.name)}`}</div><div class="big num">≈ ${money(myEstimate())}</div></div>
-      <p class="small muted" style="text-align:right">${unclaimed.length ? `${unclaimed.length} item${unclaimed.length > 1 ? "s" : ""} unclaimed` : "Everything's claimed"}<br>${isPayer() ? "Lock when everyone's done" : `Waiting for ${esc(bill.payer.name)} to lock`}</p>
+      <div><div class="small muted">${isPayer() ? "Your part" : `You owe ${esc(bill.payer.name)}`}</div><div class="big num">≈ ${money(myEstimate())}</div></div>
+      <p class="small muted" style="text-align:right">${unclaimed.length ? `${unclaimed.length} unclaimed` : isPayer() ? "" : `Waiting for ${esc(bill.payer.name)}`}</p>
     </div></div>`;
 
   app.querySelectorAll("[data-claim]").forEach((b) => b.addEventListener("click", () => {
@@ -529,8 +520,7 @@ function adminPanel(unclaimed = []) {
           ${p.id !== bill.payer.id && p.taken ? `<button class="link small" data-reset="${p.id}">Reset name</button>` : ""}</li>`).join("")}
       </ul>
       ${bill.status === "open" ? `
-        <button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>Lock &amp; request payment</button>
-        ${unclaimed.length ? `<p class="small muted">Still unclaimed: ${unclaimed.map((i) => esc(i.name)).join(", ")}</p>` : ""}` : ""}
+        <button class="primary" id="lock" ${unclaimed.length ? "disabled" : ""}>Lock &amp; request payment</button>` : ""}
       ${bill.unlockable ? `<button id="unlock">Unlock to change claims</button>` : ""}
     </section>`;
 }
@@ -592,7 +582,7 @@ function myItemsList() {
   if (rows.length === 0) return "";
   return `<ul class="people small muted">${rows.map(({ item, row }) =>
     `<li><span>${esc(item.name)}${row.fraction < 1 ? ` (${Math.round(row.fraction * 100)}%)` : ""}</span><span class="num">${money(Math.round(item.priceCents * row.fraction))}</span></li>`).join("")}
-    <li><span>+ your part of tax${bill.receipt.tipCents ? " and tip" : ""}${bill.receipt.discountCents ? ", minus discount" : ""}</span><span></span></li></ul>`;
+    <li><span>+ tax${bill.receipt.tipCents ? " & tip" : ""}${bill.receipt.discountCents ? ", − discount" : ""}</span><span></span></li></ul>`;
 }
 
 function renderPayment() {
@@ -603,9 +593,9 @@ function renderPayment() {
 
   let mine = "";
   if (owes && myStatus === "paid") {
-    mine = `<p class="notice ok">You paid ${money(myCents)}. Thanks!</p>`;
+    mine = `<p class="notice ok">You paid ${money(myCents)}</p>`;
   } else if (owes && myStatus === "pending") {
-    mine = `<p class="notice warn">Your payment of ${money(myCents)} is pending review at PayPal.</p>`;
+    mine = `<p class="notice warn">Your ${money(myCents)} payment is pending</p>`;
   } else if (owes) {
     mine = `
       <div class="small muted">You owe ${esc(bill.payer.name)}</div>
@@ -613,7 +603,7 @@ function renderPayment() {
       ${myItemsList()}
       <div id="paypal-slot"><p class="muted small">Loading PayPal…</p></div>`;
   } else if (me && !isPayer()) {
-    mine = `<p class="notice ok">You don't owe anything on this bill.</p>`;
+    mine = `<p class="notice ok">You owe nothing.</p>`;
   }
 
   app.innerHTML = `
@@ -694,7 +684,7 @@ async function onApprove({ orderId }) {
   if (data.error === "INSTRUMENT_DECLINED") {
     toast("Your payment method was declined. Try again with a different one.", "error");
   } else if (ok && data.status === "PENDING") {
-    toast(`Payment received and pending review. Reference: ${data.captureId}`);
+    toast("Payment pending review");
   } else if (!ok || data.status !== "COMPLETED") {
     toast(data.error ?? "Something went wrong capturing the payment. You have not been charged.", "error");
   } else {

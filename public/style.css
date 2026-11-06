@@ -240,8 +240,6 @@ paypal-button { display: block; width: 100%; }
 .scan-btn:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-.divider { display: flex; align-items: center; gap: 12px; font-size: 0.875rem; font-weight: 600; color: var(--muted); }
-.divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--border); }
 
 /* Details appear once, after the photo is taken: opacity + 4px blur + 12px rise over 300ms.
    Under reduced motion it is a plain fade. The hidden state lives in the "from" keyframe. */
