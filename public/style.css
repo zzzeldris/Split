@@ -1,5 +1,6 @@
 /* Look from the UI mockup: navy text, one blue accent, white rounded cards, Inter. */
 :root {
+  color-scheme: light;
   --bg: #f5f7fa;
   --card: #ffffff;
   --text: #012169;
@@ -17,24 +18,23 @@
   --shadow: 0 8px 28px rgba(1, 33, 105, 0.10);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1424;
-    --card: #151d33;
-    --text: #eaf0ff;
-    --muted: #a9b6d6;
-    --border: #2a3552;
-    --field-border: #4a5a80;
-    --accent: #8ab4f8;
-    --accent-text: #0b1b33;
-    --accent-soft: #1f2d45;
-    --success: #6fcf86;
-    --success-soft: #19301f;
-    --warn: #f3c969;
-    --warn-soft: #3a2f12;
-    --error: #ff8a80;
-    --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
-  }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0d1424;
+  --card: #151d33;
+  --text: #eaf0ff;
+  --muted: #a9b6d6;
+  --border: #2a3552;
+  --field-border: #4a5a80;
+  --accent: #8ab4f8;
+  --accent-text: #0b1b33;
+  --accent-soft: #1f2d45;
+  --success: #6fcf86;
+  --success-soft: #19301f;
+  --warn: #f3c969;
+  --warn-soft: #3a2f12;
+  --error: #ff8a80;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -67,7 +67,7 @@ main { max-width: 560px; margin: 0 auto; padding: 24px 16px 0; display: grid; gr
   align-items: center;
   justify-content: center;
   min-height: 80px;
-  padding: 16px 72px;
+  padding: 16px 128px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
 }
@@ -84,6 +84,11 @@ main { max-width: 560px; margin: 0 auto; padding: 24px 16px 0; display: grid; gr
   text-decoration: none;
 }
 .icon-btn.right { right: 16px; }
+.icon-btn.right-2 { right: 72px; }
+button.icon-btn { padding: 0; }
+#theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] #theme-toggle .icon-sun { display: block; }
+:root[data-theme="dark"] #theme-toggle .icon-moon { display: none; }
 .icon-btn.left { left: 16px; }
 .icon-btn svg { width: 24px; height: 24px; }
 
@@ -251,9 +256,7 @@ paypal-button { display: block; width: 100%; }
 
 /* Receipt preview: 1px pure black/white outline inset by 1px so the photo's edge stays crisp */
 .scan-card img { outline: 1px solid oklch(0 0 0 / 0.1); outline-offset: -1px; }
-@media (prefers-color-scheme: dark) {
-  .scan-card img { outline-color: oklch(1 0 0 / 0.1); }
-}
+:root[data-theme="dark"] .scan-card img { outline-color: oklch(1 0 0 / 0.1); }
 
 /* Press feedback: 0.96 over 150ms, never on a disabled button. These buttons draw their own pressed
    state, so the default tap flash is switched off. */
