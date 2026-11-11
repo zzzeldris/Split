@@ -35,8 +35,8 @@ Built for the PayPal AI Hackathon ("Build What's Next with PayPal and AI").
 You need Node.js 22.9 or newer, a [PayPal sandbox app](https://developer.paypal.com/dashboard/applications/sandbox) and a [Gemini API key](https://aistudio.google.com/apikey).
 
 ```sh
-git clone https://github.com/zzzeldris/PayPalHackathon.git
-cd PayPalHackathon
+git clone https://github.com/zzzeldris/Split.git
+cd Split
 npm install
 cp .env.example .env   # then fill in the values
 npm start
